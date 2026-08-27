@@ -230,6 +230,34 @@
   .btn:disabled { opacity: .35; cursor: not-allowed; }
   .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 
+  /* keyboard focus */
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  .drop:focus-visible { border-color: var(--accent); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+
+  /* format locked while processing */
+  .options.locked { opacity: .55; pointer-events: none; }
+
+  /* results summary row */
+  .results-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 0 2px;
+  }
+  .results-clear {
+    background: transparent; border: none;
+    color: var(--accent); font-size: 11px;
+    cursor: pointer; padding: 2px 6px;
+    border-radius: 6px; font-weight: 600;
+  }
+  .results-clear:hover { background: rgba(91,141,239,.12); }
+
   /* progress */
   .progress-wrap { margin-top: 18px; display: none; }
   .progress-wrap.show { display: block; }
@@ -367,7 +395,7 @@
   </div>
 
   <div class="card">
-    <div class="drop" id="dropzone">
+    <div class="drop" id="dropzone" tabindex="0" role="button" aria-label="添加视频文件：点击选择或拖拽到此处">
       <input type="file" id="fileInput" accept="video/*,.mp4,.mkv,.avi,.mov,.flv,.wmv,.webm,.ts" multiple>
       <div class="drop-primary">📹 拖入视频文件，或点击选择</div>
       <div class="drop-hint">支持 MP4 / MKV / AVI / MOV / WebM / TS · 可多选</div>
@@ -425,6 +453,7 @@ const cancelBtn = document.getElementById('cancelBtn');
 const errorMsg = document.getElementById('errorMsg');
 const errorText = document.getElementById('errorText');
 const dropzone = document.getElementById('dropzone');
+const optionsEl = document.getElementById('fmtOptions');
 
 let files = []; // [{file, status:'pending'|'done'|'fail', name, size, outPath, downloadName}]
 let processing = false;
@@ -441,7 +470,19 @@ function spinner() {
 function newJobId() {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
 }
+function fmtEta(sec) {
+  if (!isFinite(sec) || sec <= 0) return '';
+  if (sec < 60) return `约 ${Math.ceil(sec)} 秒剩余`;
+  const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+  return s ? `约 ${m} 分 ${s} 秒剩余` : `约 ${m} 分钟剩余`;
+}
+function formatBytes(n) {
+  if (n >= 1024 * 1024 * 1024) return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+  if (n >= 1024 * 1024) return (n / 1024 / 1024).toFixed(2) + ' MB';
+  return Math.max(1, Math.round(n / 1024)) + ' KB';
+}
 const completed = [];   // 已完成的产出 [{name,size,url}]
+let batchDone = false;  // 当批是否已结束(控制汇总条文案)
 function checkIcon() {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 }
@@ -456,22 +497,33 @@ function setProgress(pct, label) {
 }
 function renderResults(total) {
   resultsEl.classList.toggle('show', total > 0);
-  resultsEl.innerHTML = completed.map((c, i) => `
+  const summary = total > 0
+    ? `<div class="results-summary"><span>${batchDone ? '本批完成' : '已完成'} ${total} 个</span><button type="button" class="results-clear" id="resultsClearBtn" aria-label="清空下载列表">清空列表</button></div>`
+    : '';
+  const rows = completed.map((c, i) => `
     <div class="result-item">
       <div class="result-item-icon">${checkIcon()}</div>
       <div class="result-item-info">
         <div class="result-item-name" title="${c.name}">${c.name}</div>
-        <div class="result-item-meta">${(c.size/1024/1024).toFixed(2)} MB · ${i+1}/${total}</div>
+        <div class="result-item-meta">${formatBytes(c.size)} · ${i+1}/${total}</div>
       </div>
       <a class="download-mini" href="${c.url}" download="${c.name}" aria-label="下载 ${c.name}">下载</a>
     </div>`).join('');
+  resultsEl.innerHTML = summary + rows;
 }
+resultsEl.addEventListener('click', e => {
+  if (e.target && e.target.id === 'resultsClearBtn') {
+    completed.length = 0;
+    renderResults(0);
+  }
+});
 // 订阅服务端转码进度（SSE），base/top 为该阶段在总进度条上的显示区间；
-// 同步更新对应文件行的实时百分比
+// 同步更新对应文件行的实时百分比，并按进度斜率估算剩余时间（EMA 平滑）
 function trackProgress(jobId, name, base, top, item) {
   let es;
   try { es = new EventSource(`/api/progress/${encodeURIComponent(jobId)}`); }
   catch (_) { return { close() {} }; }
+  let lastPct = -1, lastT = 0, emaSec = null;
   es.onmessage = ev => {
     try {
       const d = JSON.parse(ev.data);
@@ -485,8 +537,16 @@ function trackProgress(jobId, name, base, top, item) {
         item.pct = pct;
         renderFiles();
       }
+      // ETA：两次真实刻度间推出整体耗时速率，指数平滑后估算剩余
+      const now = performance.now();
+      if (d.status === 'transcoding' && pct > lastPct && pct > 0 && pct < 100 && lastPct >= 0) {
+        const totalEst = ((now - lastT) / (pct - lastPct)) * 100;   // 预计总耗时 ms
+        const remain = Math.max(0, (totalEst * (100 - pct)) / 100 / 1000); // 秒
+        emaSec = emaSec == null ? remain : emaSec * 0.7 + remain * 0.3;
+      }
+      if (pct !== lastPct) { lastPct = pct; lastT = now; }
       const disp = Math.min(top - 1, base + Math.round(pct * (top - base) / 100));
-      if (disp > 0) setProgress(disp, `转码中：${name}`);
+      if (disp > 0) setProgress(disp, `转码中：${name}${emaSec != null ? ' · ' + fmtEta(emaSec) : ''}`);
     } catch (_) {}
   };
   return es;
@@ -521,6 +581,8 @@ function addFiles(items) {
     const ok = item.type && item.type.startsWith('video/') ||
       !item.type && /\.(mp4|mkv|avi|mov|flv|wmv|webm|ts|m4v)$/i.test(item.name);
     if (!ok) continue;
+    // 去重：同名单同大小视为重复
+    if (files.some(f => f.name === item.name && f.size === item.size)) continue;
     files.push({ file: item, status: 'pending', name: item.name, size: item.size });
   }
   renderFiles();
@@ -534,6 +596,11 @@ function addFiles(items) {
   dropzone.addEventListener(ev, () => dropzone.classList.remove('dragover')));
 dropzone.addEventListener('drop', e => { e.preventDefault(); addFiles(e.dataTransfer.files); });
 fileInput.addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+dropzone.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+});
+// 拖到页面其他位置时阻止浏览器直接打开视频文件
+['dragover', 'drop'].forEach(ev => window.addEventListener(ev, e => e.preventDefault()));
 
 fileListEl.addEventListener('click', e => {
   const btn = e.target.closest('.file-chip-remove');
@@ -586,6 +653,8 @@ extractBtn.addEventListener('click', async () => {
   if (files.length === 0 || processing) return;
   const fmt = document.querySelector('input[name=fmt]:checked').value;
   processing = true;
+  batchDone = false;
+  optionsEl.classList.add('locked');
   renderFiles();
   errorMsg.classList.remove('show');
   progressWrap.classList.add('show');
@@ -673,8 +742,11 @@ extractBtn.addEventListener('click', async () => {
   } finally {
     processing = false;
     activeJobId = null;
+    batchDone = true;
+    optionsEl.classList.remove('locked');
     cancelBtn.classList.remove('show');
     progressWrap.classList.remove('show');
+    renderResults(completed.length);
     renderFiles();
   }
 });

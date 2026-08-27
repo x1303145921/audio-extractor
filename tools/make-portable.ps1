@@ -1,4 +1,4 @@
-# make-portable.ps1 - Build zero-dependency portable package
+﻿# make-portable.ps1 - Build zero-dependency portable package
 # Usage: powershell -ExecutionPolicy Bypass -File tools\make-portable.ps1
 # Output: dist-portable\<zip>. Requires local node.exe + ffmpeg.exe sources below.
 
@@ -10,9 +10,12 @@ $DistDir = Join-Path $Project 'dist-portable'
 $StageName = "audio-extractor-portable-v$Version"
 $Stage = Join-Path $DistDir $StageName
 
-# --- binary sources (adjust here if your local install differs) ---
+# --- binary sources ---
+# FFmpeg 用精简版(essentials): 提取音频所需的编码器(libmp3lame/libopus/aac/flac/copy)全部包含,
+# 五格式已实测通过; 完整版仅本机开发用, 不随包分发
 $NodeSrc = 'D:\nodejs\node.exe'
-$FfmpegSrc = 'D:\Tools\ffmpeg\bin\ffmpeg.exe'
+$FfmpegSrc = 'D:\Tools\PortableTools\ffmpeg-mini\extracted\ffmpeg-9.0.1-essentials_build\bin\ffmpeg.exe'
+# 备选(完整版): 'D:\Tools\ffmpeg\bin\ffmpeg.exe'
 foreach ($src in @($NodeSrc, $FfmpegSrc)) {
     if (-not (Test-Path $src)) { Write-Error "Source binary missing: $src"; exit 1 }
 }
