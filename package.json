@@ -1,0 +1,22 @@
+{
+  "name": "audio-extractor",
+  "version": "0.1.0",
+  "description": "Local video-to-audio extractor for Windows. Drag & drop, M4A/MP3/WAV/FLAC/Opus, bundled Node + FFmpeg.",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "ffmpeg",
+    "audio",
+    "extractor",
+    "video-to-audio",
+    "offline"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.2.1",
+    "multer": "^2.2.0"
+  }
+}

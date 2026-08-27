@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<link rel="icon" type="image/png" href="app-icon.png">
+<title>音频提取工具</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#5b8def">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="音频提取">
+<style>
+  :root {
+    --bg: #0b0d13;
+    --bg2: #141720;
+    --bg3: #1c1f2e;
+    --fg: #e9ebf2;
+    --muted: #7a80a0;
+    --accent: #5b8def;
+    --accent2: #7c5cfc;
+    --ok: #2dd4a8;
+    --err: #f0544f;
+    --warn: #f5b454;
+    --border: #252840;
+    --glow: rgba(91,141,239,.18);
+    --radius: 14px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background-image:
+      radial-gradient(ellipse 70% 50% at 50% -10%, rgba(91,141,239,.12), transparent),
+      radial-gradient(ellipse 40% 30% at 80% 90%, rgba(124,92,252,.08), transparent);
+  }
+
+  .app { width: 100%; max-width: 620px; }
+
+  /* header */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .logo {
+    width: 52px; height: 52px;
+    background: linear-gradient(140deg, var(--accent), var(--accent2));
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 30px rgba(91,141,239,.3);
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .logo img { width: 30px; height: 30px; object-fit: contain; }
+  .header-text h1 { font-size: 20px; font-weight: 650; }
+  .header-text p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* cards */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 14px;
+  }
+
+  /* info metrics */
+  .info-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .info-cell {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .info-cell-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .info-cell-value { font-size: 16px; font-weight: 650; margin-top: 5px; }
+  .info-cell-sub { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+  /* dropzone */
+  .drop {
+    position: relative;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 44px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .22s;
+    overflow: hidden;
+  }
+  .drop::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 50%, var(--glow), transparent 70%);
+    opacity: 0;
+    transition: opacity .22s;
+  }
+  .drop:hover, .drop.dragover { border-color: var(--accent); }
+  .drop:hover::before, .drop.dragover::before { opacity: 1; }
+  .drop input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 2;
+  }
+  .drop-primary {
+    position: relative; z-index: 1;
+    font-size: 14px; color: var(--muted);
+  }
+  .drop-hint {
+    position: relative; z-index: 1;
+    font-size: 11px; color: var(--muted); opacity: .6; margin-top: 5px;
+  }
+
+  /* file chips */
+  .file-list {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .file-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  .file-chip-icon {
+    width: 30px; height: 30px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, rgba(91,141,239,.2), rgba(124,92,252,.2));
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .file-chip-icon svg { width: 15px; height: 15px; color: var(--accent); }
+  .file-chip-info { flex: 1; min-width: 0; }
+  .file-chip-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-chip-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .file-chip-status {
+    font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 600;
+  }
+  .status-pending { background: rgba(245,180,84,.12); color: var(--warn); }
+  .status-done { background: rgba(45,212,168,.12); color: var(--ok); }
+  .status-fail { background: rgba(240,84,79,.12); color: var(--err); }
+  .file-chip-remove {
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    background: transparent; border: none;
+    color: var(--muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .15s; flex-shrink: 0;
+  }
+  .file-chip-remove:hover { background: rgba(240,84,79,.15); color: var(--err); }
+
+  /* format options */
+  .options-title {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: .6px; text-transform: uppercase;
+    color: var(--muted); margin: 18px 0 9px;
+  }
+  .options {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 7px;
+  }
+  .fmt-label {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 11px 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+  }
+  .fmt-label:hover { border-color: rgba(91,141,239,.4); }
+  .fmt-label input { position: absolute; opacity: 0; pointer-events: none; }
+  .fmt-label:has(input:checked) {
+    border-color: var(--accent);
+    background: rgba(91,141,239,.1);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .fmt-badge { font-size: 12px; font-weight: 700; letter-spacing: .3px; }
+  .fmt-desc { font-size: 10px; color: var(--muted); text-align: center; }
+
+  /* button */
+  .btn {
+    width: 100%;
+    margin-top: 20px;
+    padding: 13px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+    letter-spacing: .2px;
+    box-shadow: 0 6px 24px rgba(91,141,239,.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 30px rgba(91,141,239,.4); }
+  .btn:active:not(:disabled) { transform: translateY(0); }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+  /* progress */
+  .progress-wrap { margin-top: 18px; display: none; }
+  .progress-wrap.show { display: block; }
+  .progress-bar {
+    height: 5px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--ok));
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+    width: 0%;
+    transition: width .3s;
+    border-radius: 4px;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .progress-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 7px;
+    font-size: 12px; color: var(--muted);
+  }
+
+  /* result */
+  .result {
+    background: rgba(45,212,168,.06);
+    border: 1px solid rgba(45,212,168,.25);
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 16px;
+    display: none;
+    align-items: center;
+    gap: 14px;
+  }
+  .result.show { display: flex; }
+  .result-icon {
+    width: 40px; height: 40px;
+    background: rgba(45,212,168,.15);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .result-icon svg { width: 20px; height: 20px; color: var(--ok); }
+  .result-info { flex: 1; min-width: 0; }
+  .result-label { font-size: 11px; color: var(--muted); }
+  .result-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .result-size { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .download-btn {
+    padding: 9px 16px;
+    background: var(--ok); color: #0b0d13;
+    border: none; border-radius: 8px;
+    font-size: 13px; font-weight: 650;
+    text-decoration: none; white-space: nowrap;
+    cursor: pointer; transition: all .15s;
+  }
+  .download-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+  /* error */
+  .error-msg {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: rgba(240,84,79,.07);
+    border: 1px solid rgba(240,84,79,.25);
+    border-radius: 8px;
+    color: var(--err);
+    font-size: 13px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+  .error-msg.show { display: flex; }
+
+  .footer {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 20px;
+    opacity: .7;
+  }
+
+  @media (max-width: 520px) {
+    .options { grid-template-columns: repeat(3, 1fr); }
+    .info-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="logo"><img src="app-icon.png" alt="logo"></div>
+    <div class="header-text">
+      <h1>音频提取工具</h1>
+      <p>从视频中提取高质量音频 · 本地处理 · 不离开你的电脑</p>
+    </div>
+  </div>
+
+  <div class="info-row">
+    <div class="info-cell">
+      <div class="info-cell-label">处理方式</div>
+      <div class="info-cell-value" style="color:var(--ok)">本地</div>
+      <div class="info-cell-sub">文件不离开你的电脑</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-cell-label">支持格式</div>
+      <div class="info-cell-value">5 种</div>
+      <div class="info-cell-sub">M4A · MP3 · WAV · FLAC · Opus</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-cell-label">处理速度</div>
+      <div class="info-cell-value" style="color:var(--accent)">≈实时</div>
+      <div class="info-cell-sub">FFmpeg 直接转码</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="drop" id="dropzone">
+      <input type="file" id="fileInput" accept="video/*,.mp4,.mkv,.avi,.mov,.flv,.wmv,.webm,.ts" multiple>
+      <div class="drop-primary">📹 拖入视频文件，或点击选择</div>
+      <div class="drop-hint">支持 MP4 / MKV / AVI / MOV / WebM / TS · 可多选</div>
+    </div>
+
+    <div class="file-list" id="fileList"></div>
+
+    <div class="options-title">输出格式</div>
+    <div class="options" id="fmtOptions">
+      <label class="fmt-label"><input type="radio" name="fmt" value="m4a" checked><span class="fmt-badge">M4A</span><span class="fmt-desc">推荐通用</span></label>
+      <label class="fmt-label"><input type="radio" name="fmt" value="mp3"><span class="fmt-badge">MP3</span><span class="fmt-desc">最兼容</span></label>
+      <label class="fmt-label"><input type="radio" name="fmt" value="wav"><span class="fmt-badge">WAV</span><span class="fmt-desc">无损大文件</span></label>
+      <label class="fmt-label"><input type="radio" name="fmt" value="flac"><span class="fmt-badge">FLAC</span><span class="fmt-desc">无损归档</span></label>
+      <label class="fmt-label"><input type="radio" name="fmt" value="opus"><span class="fmt-badge">Opus</span><span class="fmt-desc">高压缩率</span></label>
+    </div>
+
+    <button class="btn" id="extractBtn" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      开始提取
+    </button>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-row"><span id="progressLabel">处理中...</span><span id="progressPct">0%</span></div>
+    </div>
+
+    <div class="result" id="result">
+      <div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <div class="result-info">
+        <div class="result-label">提取完成，可下载</div>
+        <div class="result-name" id="resultName"></div>
+        <div class="result-size" id="resultSize"></div>
+      </div>
+      <a class="download-btn" id="downloadBtn" href="#" download>⬇ 下载</a>
+    </div>
+
+    <div class="error-msg" id="errorMsg">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      <span id="errorText"></span>
+    </div>
+  </div>
+
+  <p class="footer">基于 FFmpeg 本地转码 · 不依赖任何在线服务 · 支持最大 4GB 文件</p>
+</div>
+
+<script>
+const API = '/api/extract';
+const fileInput = document.getElementById('fileInput');
+const fileListEl = document.getElementById('fileList');
+const extractBtn = document.getElementById('extractBtn');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+const progressPct = document.getElementById('progressPct');
+const resultEl = document.getElementById('result');
+const resultName = document.getElementById('resultName');
+const resultSize = document.getElementById('resultSize');
+const downloadBtn = document.getElementById('downloadBtn');
+const errorMsg = document.getElementById('errorMsg');
+const errorText = document.getElementById('errorText');
+const dropzone = document.getElementById('dropzone');
+
+let files = []; // [{file, status:'pending'|'done'|'fail', name, size, outPath, downloadName}]
+let processing = false;
+
+function videoIcon() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="4" width="20" height="16" rx="3"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" opacity="0.3"/></svg>`;
+}
+function removeIcon() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+}
+function spinner() {
+  return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2.5" stroke-linecap="round"><path d="M12 2a10 10 0 0110 10"/></svg>`;
+}
+function setStatus(item, st) {
+  item.status = st;
+  renderFiles();
+}
+function renderFiles() {
+  fileListEl.innerHTML = files.map((item, i) => {
+    let badge = '';
+    if (item.status === 'pending') badge = `<span class="file-chip-status status-pending">等待中</span>`;
+    else if (item.status === 'done') badge = `<span class="file-chip-status status-done">已完成</span>`;
+    else if (item.status === 'fail') badge = `<span class="file-chip-status status-fail">失败</span>`;
+    return `<div class="file-chip">
+      <div class="file-chip-icon">${videoIcon()}</div>
+      <div class="file-chip-info">
+        <div class="file-chip-name" title="${item.name}">${item.name}</div>
+        <div class="file-chip-meta">${(item.size/1024/1024).toFixed(1)} MB · ${item.downloadName || ''}</div>
+      </div>
+      ${badge}
+      <button class="file-chip-remove" data-i="${i}" title="移除">${removeIcon()}</button>
+    </div>`;
+  }).join('');
+  extractBtn.disabled = files.length === 0 || processing;
+}
+
+function addFiles(items) {
+  for (const item of items) {
+    const ok = item.type && item.type.startsWith('video/') ||
+      !item.type && /\.(mp4|mkv|avi|mov|flv|wmv|webm|ts|m4v)$/i.test(item.name);
+    if (!ok) continue;
+    files.push({ file: item, status: 'pending', name: item.name, size: item.size });
+  }
+  renderFiles();
+  resultEl.classList.remove('show');
+  errorMsg.classList.remove('show');
+}
+
+['dragenter','dragover'].forEach(ev =>
+  dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('dragover'); }));
+['dragleave','drop'].forEach(ev =>
+  dropzone.addEventListener(ev, () => dropzone.classList.remove('dragover')));
+dropzone.addEventListener('drop', e => { e.preventDefault(); addFiles(e.dataTransfer.files); });
+fileInput.addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+
+fileListEl.addEventListener('click', e => {
+  const btn = e.target.closest('.file-chip-remove');
+  if (!btn || processing) return;
+  files.splice(+btn.dataset.i, 1);
+  renderFiles();
+});
+
+// ---- Upload helpers (chunked for >50 MB, direct below that) ----
+const CHUNK_SIZE = 8 * 1024 * 1024;
+
+function uploadChunked(file) {
+  return new Promise((resolve, reject) => {
+    const uploadId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    let sent = 0;
+    (async function loop() {
+      if (sent >= totalChunks) {
+        return fetch('/api/finalize-upload', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uploadId })
+        }).then(r => r.json()).then(d => {
+          if (!d.ok) throw new Error(d.error);
+          resolve(d.path);
+        }).catch(reject);
+      }
+      const start = sent * CHUNK_SIZE;
+      const chunk = file.slice(start, Math.min(start + CHUNK_SIZE, file.size));
+      const fd = new FormData();
+      fd.append('chunk', chunk);
+      fd.append('uploadId', uploadId);
+      fd.append('chunkIndex', String(sent));
+      fd.append('totalChunks', String(totalChunks));
+      fd.append('filename', file.name);
+      fd.append('fileSize', String(file.size));
+      fetch('/api/upload-chunk', { method: 'POST', body: fd })
+        .then(r => { if (!r.ok) throw new Error('分片上传失败'); return r.json(); })
+        .then(() => {
+          sent++;
+          const pct = Math.round((sent / totalChunks) * 49);
+          progressFill.style.width = pct + '%';
+          progressPct.textContent = pct + '%';
+          progressLabel.textContent = `上传中… ${pct}%`;
+          return loop();
+        })
+        .catch(reject);
+    })();
+  });
+}
+
+extractBtn.addEventListener('click', async () => {
+  if (files.length === 0 || processing) return;
+  const fmt = document.querySelector('input[name=fmt]:checked').value;
+  processing = true;
+  renderFiles();
+  resultEl.classList.remove('show');
+  errorMsg.classList.remove('show');
+  progressWrap.classList.add('show');
+
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const item = files[i];
+      progressLabel.textContent = `准备上传：${item.name}`;
+      progressFill.style.width = '0%';
+      progressPct.textContent = '0%';
+      setStatus(item, 'pending');
+
+      let result;
+      if (item.file.size <= 50 * 1024 * 1024) {
+        // Small: one-shot extract
+        const form = new FormData();
+        form.append('video', item.file);
+        form.append('format', fmt);
+        const res = await fetch(API, { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '请求失败');
+        result = data;
+        progressFill.style.width = '100%';
+        progressPct.textContent = '100%';
+      } else {
+        // Large: chunked upload → server-side extract
+        const mergedRel = await uploadChunked(item.file);
+        progressFill.style.width = '49%';
+        progressPct.textContent = '49%';
+        progressLabel.textContent = `上传完成，转码中：${item.name}`;
+        const exRes = await fetch('/api/extract-from-path', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath: mergedRel, format: fmt })
+        });
+        const data = await exRes.json();
+        if (!exRes.ok) throw new Error(data.error);
+        result = data;
+        progressFill.style.width = '100%';
+        progressPct.textContent = '100%';
+      }
+
+      setStatus(item, 'done');
+      const sizeMB = (result.size / 1024 / 1024).toFixed(2);
+      resultName.textContent  = result.downloadName;
+      resultSize.textContent  = `${sizeMB} MB · ${i+1}/${files.length}`;
+      downloadBtn.href        = result.outputPath;
+      downloadBtn.download    = result.downloadName;
+      resultEl.classList.add('show');
+    }
+  } catch (e) {
+    errorText.textContent = e.message;
+    errorMsg.classList.add('show');
+    files.filter(f => f.status === 'pending').forEach(f => setStatus(f, 'fail'));
+  } finally {
+    processing = false;
+    progressWrap.classList.remove('show');
+    renderFiles();
+  }
+});
+</script>
+
+<div id="installBanner" style="display:none;position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);color:var(--fg);padding:10px 18px;border-radius:12px;font-size:13px;box-shadow:0 8px 28px rgba(0,0,0,.4);z-index:9;cursor:pointer;white-space:nowrap;font-family:inherit">
+  📲 在浏览器菜单中选「添加到主屏幕」，体验接近原生应用
+</div>
+<script>
+(function(){
+  var b=document.getElementById('installBanner');
+  if(!b)return;
+  var dpp=null;
+  window.addEventListener('beforeinstallprompt',function(e){
+    e.preventDefault();dpp=e;b.style.display='block';
+  });
+  b.addEventListener('click',function(){
+    if(!dpp)return;dpp.prompt();dpp.userChoice.then(function(){dpp=null;b.style.display='none';});
+  });
+})();
+</script>
+</body>
+</html>

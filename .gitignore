@@ -1,0 +1,16 @@
+# runtime deps are installed locally / copied by the build script
+node_modules/
+# build output
+dist/
+# transient data
+tmp_uploads/
+tmp_chunks/
+*.log
+.DS_Store
+Thumbs.db
+# never commit binaries or local material paths
+node.exe
+ffmpeg.exe
+ffprobe.exe
+ffplay.exe
+tools/build.local.bat
