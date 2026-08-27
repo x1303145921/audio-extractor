@@ -24,7 +24,7 @@ start "" cmd /c ""%NODE_BIN%" server.js"
 
 :wait
 timeout /t 1 /nobreak >nul
-powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8912/api/health' -UseBasicParsing; if ($r.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }"
+curl -s --noproxy "*" -m 3 http://localhost:8912/api/health >nul 2>nul
 if errorlevel 1 goto wait
 
 :open_browser
