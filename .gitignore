@@ -1,0 +1,6 @@
+﻿node_modules/
+tmp_uploads/
+tmp_chunks/
+dist/
+*.log
+.DS_Store
