@@ -1,15 +1,23 @@
 {
   "name": "audio-extractor",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.1.0",
+  "description": "从视频文件本地提取音频（M4A/MP3/WAV/FLAC/Opus），基于 FFmpeg 的自托管 Web 工具，支持 PWA 与分片上传",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "ffmpeg",
+    "audio-extraction",
+    "self-hosted",
+    "pwa",
+    "video-to-audio"
+  ],
+  "author": "颜 (x1303145921)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "express": "^5.2.1",
     "multer": "^2.2.0"

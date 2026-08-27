@@ -11,11 +11,7 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-if not exist "D:\Tools\ffmpeg\bin\ffmpeg.exe" (
-    echo [错误] 未检测到 FFmpeg（D:\Tools\ffmpeg\bin\ffmpeg.exe）
-    pause
-    exit /b 1
-)
+:: FFmpeg 由服务端自动探测（FFMPEG_PATH → PATH → 默认位置），未找到时页面会给出明确提示
 
 :: 检查端口是否已被占用
 netstat -ano | findstr ":8912.*LISTENING" >nul 2>nul

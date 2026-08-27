@@ -10,11 +10,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if not exist "D:\Tools\ffmpeg\bin\ffmpeg.exe" (
-    echo [ERROR] FFmpeg not found at D:\Tools\ffmpeg\bin\ffmpeg.exe
-    pause
-    exit /b 1
-)
+:: FFmpeg is auto-resolved by the server (FFMPEG_PATH → PATH → default location)
 
 netstat -ano | findstr ":8912.*LISTENING" >nul 2>nul
 if not errorlevel 1 (

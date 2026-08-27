@@ -423,6 +423,32 @@ function removeIcon() {
 function spinner() {
   return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2.5" stroke-linecap="round"><path d="M12 2a10 10 0 0110 10"/></svg>`;
 }
+function newJobId() {
+  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+}
+// 订阅服务端转码进度（SSE），base/top 为该阶段在总进度条上的显示区间
+function trackProgress(jobId, name, base, top) {
+  let es;
+  try { es = new EventSource(`/api/progress/${encodeURIComponent(jobId)}`); }
+  catch (_) { return { close() {} }; }
+  es.onmessage = ev => {
+    try {
+      const d = JSON.parse(ev.data);
+      if (d.status === 'queued') {
+        progressLabel.textContent = `排队等待转码：${name}`;
+        return;
+      }
+      const pct = d.pct || 0;
+      const disp = Math.min(top - 1, base + Math.round(pct * (top - base) / 100));
+      if (disp > 0) {
+        progressFill.style.width = disp + '%';
+        progressPct.textContent = disp + '%';
+        progressLabel.textContent = `转码中：${name}`;
+      }
+    } catch (_) {}
+  };
+  return es;
+}
 function setStatus(item, st) {
   item.status = st;
   renderFiles();
@@ -533,31 +559,40 @@ extractBtn.addEventListener('click', async () => {
 
       let result;
       if (item.file.size <= 50 * 1024 * 1024) {
-        // Small: one-shot extract
-        const form = new FormData();
-        form.append('video', item.file);
-        form.append('format', fmt);
-        const res = await fetch(API, { method: 'POST', body: form });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || '请求失败');
-        result = data;
-        progressFill.style.width = '100%';
-        progressPct.textContent = '100%';
+        // Small: one-shot extract（订阅服务端实时转码进度）
+        const jobId = newJobId();
+        const es = trackProgress(jobId, item.name, 5, 99);
+        try {
+          const form = new FormData();
+          form.append('video', item.file);
+          form.append('format', fmt);
+          form.append('jobId', jobId);
+          const res = await fetch(API, { method: 'POST', body: form });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || '请求失败');
+          result = data;
+          progressFill.style.width = '100%';
+          progressPct.textContent = '100%';
+        } finally { es.close(); }
       } else {
         // Large: chunked upload → server-side extract
         const mergedRel = await uploadChunked(item.file);
         progressFill.style.width = '49%';
         progressPct.textContent = '49%';
         progressLabel.textContent = `上传完成，转码中：${item.name}`;
-        const exRes = await fetch('/api/extract-from-path', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filePath: mergedRel, format: fmt })
-        });
-        const data = await exRes.json();
-        if (!exRes.ok) throw new Error(data.error);
-        result = data;
-        progressFill.style.width = '100%';
-        progressPct.textContent = '100%';
+        const jobId = newJobId();
+        const es = trackProgress(jobId, item.name, 49, 99);
+        try {
+          const exRes = await fetch('/api/extract-from-path', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: mergedRel, format: fmt, jobId })
+          });
+          const data = await exRes.json();
+          if (!exRes.ok) throw new Error(data.error);
+          result = data;
+          progressFill.style.width = '100%';
+          progressPct.textContent = '100%';
+        } finally { es.close(); }
       }
 
       setStatus(item, 'done');
