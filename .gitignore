@@ -4,3 +4,4 @@ tmp_chunks/
 dist/
 *.log
 .DS_Store
+dist-portable/

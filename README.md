@@ -19,6 +19,19 @@
 
 ## 快速开始
 
+### 方式一：免安装便携版（推荐给非技术用户）
+
+获取 `audio-extractor-portable-vX.zip`（见 GitHub Releases 或向作者索取），解压后双击「启动音频提取工具.bat」即可。
+包内自带 Node 运行时与 FFmpeg，**无需安装任何东西**，Windows 10/11 64 位开箱即用；首次运行如遇 SmartScreen 提示，点「更多信息 → 仍要运行」。
+
+自行打包便携版（需本机已有 node.exe 与 ffmpeg.exe）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\make-portable.ps1
+```
+
+### 方式二：源码运行
+
 ### 环境要求
 
 | 依赖 | 要求 | 说明 |

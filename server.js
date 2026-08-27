@@ -28,7 +28,7 @@ for (const d of [UPLOAD_DIR, CHUNK_DIR]) {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 }
 
-// ---------- FFmpeg 解析：环境变量 → PATH → 本机默认路径 ----------
+// ---------- FFmpeg 解析：环境变量 → PATH → 随包自带的 ffmpeg-bin → 本机默认路径 ----------
 function resolveFfmpegPath() {
   const envPath = process.env.FFMPEG_PATH;
   if (envPath && fs.existsSync(envPath)) return envPath;
@@ -36,6 +36,11 @@ function resolveFfmpegPath() {
     const probe = spawnSync('ffmpeg', ['-version'], { windowsHide: true });
     if (!probe.error && probe.status === 0) return 'ffmpeg';
   } catch (_) { /* PATH 中没有，继续回退 */ }
+  // 便携版随包位置：server.js 同目录的 ffmpeg-bin\，或直接躺在旁边的 ffmpeg.exe
+  const bundled = path.join(ROOT, 'ffmpeg-bin', 'ffmpeg.exe');
+  if (fs.existsSync(bundled)) return bundled;
+  const flatBundled = path.join(ROOT, 'ffmpeg.exe');
+  if (fs.existsSync(flatBundled)) return flatBundled;
   const fallback = 'D:\\Tools\\ffmpeg\\bin\\ffmpeg.exe';
   if (fs.existsSync(fallback)) return fallback;
   return null;
