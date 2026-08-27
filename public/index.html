@@ -256,39 +256,58 @@
     font-size: 12px; color: var(--muted);
   }
 
-  /* result */
-  .result {
+  /* results list */
+  .results { margin-top: 16px; display: none; flex-direction: column; gap: 8px; }
+  .results.show { display: flex; }
+  .result-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
     background: rgba(45,212,168,.06);
     border: 1px solid rgba(45,212,168,.25);
     border-radius: 10px;
-    padding: 16px;
-    margin-top: 16px;
-    display: none;
-    align-items: center;
-    gap: 14px;
   }
-  .result.show { display: flex; }
-  .result-icon {
-    width: 40px; height: 40px;
+  .result-item-icon {
+    width: 34px; height: 34px;
     background: rgba(45,212,168,.15);
-    border-radius: 10px;
+    border-radius: 9px;
     display: flex; align-items: center; justify-content: center;
+    color: var(--ok);
     flex-shrink: 0;
   }
-  .result-icon svg { width: 20px; height: 20px; color: var(--ok); }
-  .result-info { flex: 1; min-width: 0; }
-  .result-label { font-size: 11px; color: var(--muted); }
-  .result-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-  .result-size { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .download-btn {
-    padding: 9px 16px;
+  .result-item-icon svg { width: 17px; height: 17px; }
+  .result-item-info { flex: 1; min-width: 0; }
+  .result-item-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .result-item-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .download-mini {
+    padding: 8px 14px;
     background: var(--ok); color: #0b0d13;
     border: none; border-radius: 8px;
-    font-size: 13px; font-weight: 650;
+    font-size: 12px; font-weight: 650;
     text-decoration: none; white-space: nowrap;
-    cursor: pointer; transition: all .15s;
   }
-  .download-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .download-mini:hover { filter: brightness(1.08); }
+
+  /* cancel */
+  .btn-cancel {
+    margin-top: 10px;
+    width: 100%;
+    padding: 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--muted);
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    display: none;
+    align-items: center; justify-content: center; gap: 7px;
+    transition: all .15s;
+  }
+  .btn-cancel:hover:not(:disabled) { border-color: var(--err); color: var(--err); }
+  .btn-cancel:disabled { opacity: .5; cursor: wait; }
+  .btn-cancel.show { display: flex; }
+  .status-uploading, .status-processing { background: rgba(91,141,239,.12); color: var(--accent); }
 
   /* error */
   .error-msg {
@@ -371,19 +390,16 @@
     </button>
 
     <div class="progress-wrap" id="progressWrap">
-      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-fill" id="progressFill"></div></div>
       <div class="progress-row"><span id="progressLabel">处理中...</span><span id="progressPct">0%</span></div>
     </div>
 
-    <div class="result" id="result">
-      <div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>
-      <div class="result-info">
-        <div class="result-label">提取完成，可下载</div>
-        <div class="result-name" id="resultName"></div>
-        <div class="result-size" id="resultSize"></div>
-      </div>
-      <a class="download-btn" id="downloadBtn" href="#" download>⬇ 下载</a>
-    </div>
+    <button class="btn-cancel" id="cancelBtn" type="button" aria-label="取消当前任务">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      取消当前任务
+    </button>
+
+    <div class="results" id="results" aria-live="polite"></div>
 
     <div class="error-msg" id="errorMsg">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
@@ -400,13 +416,12 @@ const fileInput = document.getElementById('fileInput');
 const fileListEl = document.getElementById('fileList');
 const extractBtn = document.getElementById('extractBtn');
 const progressWrap = document.getElementById('progressWrap');
+const progressBarEl = progressWrap.querySelector('.progress-bar');
 const progressFill = document.getElementById('progressFill');
 const progressLabel = document.getElementById('progressLabel');
 const progressPct = document.getElementById('progressPct');
-const resultEl = document.getElementById('result');
-const resultName = document.getElementById('resultName');
-const resultSize = document.getElementById('resultSize');
-const downloadBtn = document.getElementById('downloadBtn');
+const resultsEl = document.getElementById('results');
+const cancelBtn = document.getElementById('cancelBtn');
 const errorMsg = document.getElementById('errorMsg');
 const errorText = document.getElementById('errorText');
 const dropzone = document.getElementById('dropzone');
@@ -426,8 +441,34 @@ function spinner() {
 function newJobId() {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
 }
-// 订阅服务端转码进度（SSE），base/top 为该阶段在总进度条上的显示区间
-function trackProgress(jobId, name, base, top) {
+const completed = [];   // 已完成的产出 [{name,size,url}]
+function checkIcon() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+}
+function setProgress(pct, label) {
+  if (pct != null) {
+    const v = Math.max(0, Math.min(100, Math.round(pct)));
+    progressFill.style.width = v + '%';
+    progressPct.textContent = v + '%';
+    progressBarEl.setAttribute('aria-valuenow', String(v));
+  }
+  if (label) progressLabel.textContent = label;
+}
+function renderResults(total) {
+  resultsEl.classList.toggle('show', total > 0);
+  resultsEl.innerHTML = completed.map((c, i) => `
+    <div class="result-item">
+      <div class="result-item-icon">${checkIcon()}</div>
+      <div class="result-item-info">
+        <div class="result-item-name" title="${c.name}">${c.name}</div>
+        <div class="result-item-meta">${(c.size/1024/1024).toFixed(2)} MB · ${i+1}/${total}</div>
+      </div>
+      <a class="download-mini" href="${c.url}" download="${c.name}" aria-label="下载 ${c.name}">下载</a>
+    </div>`).join('');
+}
+// 订阅服务端转码进度（SSE），base/top 为该阶段在总进度条上的显示区间；
+// 同步更新对应文件行的实时百分比
+function trackProgress(jobId, name, base, top, item) {
   let es;
   try { es = new EventSource(`/api/progress/${encodeURIComponent(jobId)}`); }
   catch (_) { return { close() {} }; }
@@ -435,16 +476,17 @@ function trackProgress(jobId, name, base, top) {
     try {
       const d = JSON.parse(ev.data);
       if (d.status === 'queued') {
-        progressLabel.textContent = `排队等待转码：${name}`;
+        setProgress(null, `排队等待转码：${name}`);
         return;
       }
       const pct = d.pct || 0;
-      const disp = Math.min(top - 1, base + Math.round(pct * (top - base) / 100));
-      if (disp > 0) {
-        progressFill.style.width = disp + '%';
-        progressPct.textContent = disp + '%';
-        progressLabel.textContent = `转码中：${name}`;
+      if (item && d.status === 'transcoding') {
+        item.status = 'processing';
+        item.pct = pct;
+        renderFiles();
       }
+      const disp = Math.min(top - 1, base + Math.round(pct * (top - base) / 100));
+      if (disp > 0) setProgress(disp, `转码中：${name}`);
     } catch (_) {}
   };
   return es;
@@ -457,8 +499,10 @@ function renderFiles() {
   fileListEl.innerHTML = files.map((item, i) => {
     let badge = '';
     if (item.status === 'pending') badge = `<span class="file-chip-status status-pending">等待中</span>`;
+    else if (item.status === 'uploading') badge = `<span class="file-chip-status status-uploading">上传中</span>`;
+    else if (item.status === 'processing') badge = `<span class="file-chip-status status-processing">转码 ${item.pct|0}%</span>`;
     else if (item.status === 'done') badge = `<span class="file-chip-status status-done">已完成</span>`;
-    else if (item.status === 'fail') badge = `<span class="file-chip-status status-fail">失败</span>`;
+    else if (item.status === 'fail') badge = `<span class="file-chip-status status-fail"${item.errMsg ? ` title="${item.errMsg.replace(/"/g,'&quot;')}"` : ''}>失败 ⓘ</span>`;
     return `<div class="file-chip">
       <div class="file-chip-icon">${videoIcon()}</div>
       <div class="file-chip-info">
@@ -480,7 +524,7 @@ function addFiles(items) {
     files.push({ file: item, status: 'pending', name: item.name, size: item.size });
   }
   renderFiles();
-  resultEl.classList.remove('show');
+  resultsEl.classList.remove('show');
   errorMsg.classList.remove('show');
 }
 
@@ -530,9 +574,7 @@ function uploadChunked(file) {
         .then(() => {
           sent++;
           const pct = Math.round((sent / totalChunks) * 49);
-          progressFill.style.width = pct + '%';
-          progressPct.textContent = pct + '%';
-          progressLabel.textContent = `上传中… ${pct}%`;
+          setProgress(pct, `上传中… ${pct}%`);
           return loop();
         })
         .catch(reject);
@@ -545,73 +587,111 @@ extractBtn.addEventListener('click', async () => {
   const fmt = document.querySelector('input[name=fmt]:checked').value;
   processing = true;
   renderFiles();
-  resultEl.classList.remove('show');
   errorMsg.classList.remove('show');
   progressWrap.classList.add('show');
+  cancelBtn.classList.add('show');
+  completed.length = 0;
+  renderResults(0);
+
+  let cancelled = false;
 
   try {
     for (let i = 0; i < files.length; i++) {
+      if (cancelled) break;
       const item = files[i];
-      progressLabel.textContent = `准备上传：${item.name}`;
-      progressFill.style.width = '0%';
-      progressPct.textContent = '0%';
+      if (item.status === 'done') continue;   // 重试时跳过已完成文件
+      item.pct = 0;
+      item.errMsg = '';
+      setProgress(2, `准备上传：${item.name}`);
       setStatus(item, 'pending');
 
-      let result;
-      if (item.file.size <= 50 * 1024 * 1024) {
-        // Small: one-shot extract（订阅服务端实时转码进度）
-        const jobId = newJobId();
-        const es = trackProgress(jobId, item.name, 5, 99);
-        try {
+      let result = null;
+      let es = { close() {} };
+      let localId = null;
+      try {
+        localId = newJobId();
+        activeJobId = localId;
+        if (item.file.size <= 50 * 1024 * 1024) {
+          // Small: 一步上传+提取，订阅服务端实时转码进度
+          es = trackProgress(localId, item.name, 5, 99, item);
+          setProgress(3, `上传中：${item.name}`);
           const form = new FormData();
           form.append('video', item.file);
           form.append('format', fmt);
-          form.append('jobId', jobId);
+          form.append('jobId', localId);
           const res = await fetch(API, { method: 'POST', body: form });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || '请求失败');
           result = data;
-          progressFill.style.width = '100%';
-          progressPct.textContent = '100%';
-        } finally { es.close(); }
-      } else {
-        // Large: chunked upload → server-side extract
-        const mergedRel = await uploadChunked(item.file);
-        progressFill.style.width = '49%';
-        progressPct.textContent = '49%';
-        progressLabel.textContent = `上传完成，转码中：${item.name}`;
-        const jobId = newJobId();
-        const es = trackProgress(jobId, item.name, 49, 99);
-        try {
+        } else {
+          // Large: 分片上传 → 服务端提取
+          setStatus(item, 'uploading');
+          const mergedRel = await uploadChunked(item.file);
+          setProgress(49, `上传完成，转码中：${item.name}`);
+          setStatus(item, 'processing');
+          es = trackProgress(localId, item.name, 49, 99, item);
           const exRes = await fetch('/api/extract-from-path', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filePath: mergedRel, format: fmt, jobId })
+            body: JSON.stringify({ filePath: mergedRel, format: fmt, jobId: localId })
           });
           const data = await exRes.json();
           if (!exRes.ok) throw new Error(data.error);
           result = data;
-          progressFill.style.width = '100%';
-          progressPct.textContent = '100%';
-        } finally { es.close(); }
+        }
+        setProgress(100, '完成');
+        item.status = 'done';
+        renderFiles();
+        completed.push({ name: result.downloadName, size: result.size, url: result.outputPath });
+        renderResults(completed.length);
+      } catch (e) {
+        es.close();
+        if (localId && activeJobId === localId) activeJobId = null;
+        if (e && e.message === '已取消') {
+          cancelled = true;
+          item.status = 'pending';   // 未完成可重试
+          renderFiles();
+        } else {
+          // 单个失败不阻断后续，失败原因悬浮在状态徽标上
+          item.status = 'fail';
+          item.errMsg = e.message || String(e);
+          renderFiles();
+        }
+      } finally {
+        es.close();
+        if (localId && activeJobId === localId) activeJobId = null;
       }
-
-      setStatus(item, 'done');
-      const sizeMB = (result.size / 1024 / 1024).toFixed(2);
-      resultName.textContent  = result.downloadName;
-      resultSize.textContent  = `${sizeMB} MB · ${i+1}/${files.length}`;
-      downloadBtn.href        = result.outputPath;
-      downloadBtn.download    = result.downloadName;
-      resultEl.classList.add('show');
     }
-  } catch (e) {
-    errorText.textContent = e.message;
+
+    if (cancelled) {
+      errorText.textContent = '已取消：当前文件已停止，剩余文件保持待处理，可随时重新开始';
+      errorMsg.classList.add('show');
+    }
+  } catch (outer) {
+    errorText.textContent = outer.message || String(outer);
     errorMsg.classList.add('show');
-    files.filter(f => f.status === 'pending').forEach(f => setStatus(f, 'fail'));
+    files.filter(f => f.status !== 'done' && f.status !== 'fail').forEach(f => setStatus(f, 'fail'));
   } finally {
     processing = false;
+    activeJobId = null;
+    cancelBtn.classList.remove('show');
     progressWrap.classList.remove('show');
     renderFiles();
   }
+});
+
+// 取消当前任务：服务端会杀掉正在跑的 FFmpeg 进程
+// 进行中的请求随即以“已取消”失败进入上方 catch 分支
+let activeJobId = null;
+cancelBtn.addEventListener('click', async () => {
+  if (!activeJobId || cancelBtn.disabled) return;
+  cancelBtn.disabled = true;
+  try { await fetch(`/api/cancel/${encodeURIComponent(activeJobId)}`, { method: 'POST' }); } catch (_) {}
+  setTimeout(() => { cancelBtn.disabled = false; }, 800);
+});
+
+// 处理中拦截页面关闭/刷新，防止误触丢任务
+window.addEventListener('beforeunload', e => {
+  if (processing) { e.preventDefault(); e.returnValue = ''; }
 });
 </script>
 

@@ -14,7 +14,11 @@ const fs = require('fs');
 // ============================================================
 
 const app = express();
-const PORT = Math.max(1, parseInt(process.env.PORT || '8912', 10));
+// 监听地址：默认全部网卡（保持旧行为，方便手机局域网访问）；可用 BIND 收紧
+// 例：BIND=127.0.0.1 node server.js （仅本机可用，更安全）
+const BIND = process.env.BIND || '0.0.0.0';
+const BASE_PORT = Math.max(1, parseInt(process.env.PORT || '8912', 10));
+const PORT_RANGE = 10; // 端口被占用时向后顺延的最大尝试数
 
 // ---------- 目录常量 ----------
 const ROOT = __dirname;
@@ -41,8 +45,10 @@ const FFMPEG = resolveFfmpegPath();
 // ---------- 注册表 ----------
 // 分片上传会话（内存态；重启即失效，残片由启动清扫回收）
 const uploadSessions = new Map();
-// 转码进度任务 { status: queued|transcoding|done|failed, pct, error, createdAt, finishedAt }
+// 转码进度任务 { status, pct, error, createdAt, finishedAt, proc, cancelled }
 const extractJobs = new Map();
+// 进行中的合并操作（防同一会话并发 finalize）
+const finalizingIds = new Set();
 
 // ---------- 定时清理：防止临时数据无限蚕食磁盘 ----------
 const SESSION_IDLE_MS = 30 * 60 * 1000;    // 上传会话闲置 30 分钟视为中断
@@ -81,8 +87,9 @@ function sweepOnce() {
       } catch (_) { /* 忽略单个 */ }
     }
   } catch (_) { /* 同上 */ }
-  // 4) 过期进度任务
+  // 4) 过期进度任务（进行中的任务绝不清扫）
   for (const [id, j] of extractJobs) {
+    if (j.status === 'queued' || j.status === 'transcoding') continue;
     const ref = j.finishedAt || j.createdAt;
     if (now - ref > JOB_TTL_MS) extractJobs.delete(id);
   }
@@ -162,17 +169,29 @@ function ensureJob(rawId) {
   const jobId = (typeof rawId === 'string' && rawId.length >= 6 && rawId.length <= 80)
     ? rawId.replace(/[^A-Za-z0-9_-]/g, '_')
     : `job_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-  if (!extractJobs.has(jobId)) {
-    extractJobs.set(jobId, { status: 'queued', pct: 0, error: null, createdAt: Date.now(), finishedAt: null });
+  let job = extractJobs.get(jobId);
+  if (!job) {
+    job = { status: 'queued', pct: 0, error: null, createdAt: Date.now(), finishedAt: null, proc: null, cancelled: false };
+    extractJobs.set(jobId, job);
   }
-  return { jobId, job: extractJobs.get(jobId) };
+  return { jobId, job };
+}
+
+// 取消一个进行中的任务（杀掉其 FFmpeg 进程）
+function cancelJob(jobId) {
+  const job = extractJobs.get(String(jobId || ''));
+  if (!job) return { ok: false, error: '任务不存在或已过期' };
+  if (job.status !== 'queued' && job.status !== 'transcoding') return { ok: false, error: '任务已结束，无法取消' };
+  job.cancelled = true;
+  if (job.proc) { try { job.proc.kill(); } catch (_) {} }
+  // 若还在排队未起进程，状态由 runExtract 在起跑前检查 cancelled 标志兑now
+  return { ok: true };
 }
 
 // ---------- 转码核心 ----------
-// onProgress(pct)：可选进度回调，pct ∈ [0,100]
-// M4A/Opus 优先尝试 stream copy（容器级拷贝，零重编、约 10x 加速）；
-// 源音轨编码与目标容器不兼容时自动回退重编码
-function extract(inputPath, format, onProgress) {
+// job：进度任务对象（记录 proc 供取消，honored cancelled 标志）
+// M4A/Opus 优先尝试 stream copy；源音轨与目标容器不兼容时自动回退重编码
+function extract(inputPath, format, job) {
   const fmt = FORMAT_MAP[format];
   if (!fmt) return Promise.reject(new Error('不支持的格式'));
   const preferCopy = (format === 'm4a' || format === 'opus');
@@ -180,6 +199,7 @@ function extract(inputPath, format, onProgress) {
 
   // 单次 ffmpeg 尝试；copy=true 时走流拷贝，否则按 FORMAT_MAP 重编码
   const attempt = (copy) => new Promise((resolve, reject) => {
+    if (job && job.cancelled) return reject(Object.assign(new Error('已取消'), { keepMsg: true }));
     const args = [
       '-i', inputPath,
       '-vn',
@@ -189,14 +209,15 @@ function extract(inputPath, format, onProgress) {
     ];
 
     const ff = spawn(FFMPEG, args);
+    if (job) job.proc = ff;
     let stderr = '';
     let duration = 0;
     let lastProgress = 0;
 
     const report = (pct) => {
-      if (typeof onProgress === 'function' && pct !== lastProgress) {
+      if (job && typeof pct === 'number' && pct !== lastProgress) {
         lastProgress = pct;
-        onProgress(pct);
+        job.pct = pct;
       }
     };
 
@@ -220,6 +241,8 @@ function extract(inputPath, format, onProgress) {
     });
 
     ff.on('close', code => {
+      if (job) job.proc = null;
+      if (job && job.cancelled) return reject(Object.assign(new Error('已取消'), { keepMsg: true }));
       if (code !== 0) return reject(new Error('FFMPEG_FAIL'));
       if (!fs.existsSync(outPath)) return reject(new Error('输出文件未生成'));
       resolve(fs.statSync(outPath).size);
@@ -232,6 +255,8 @@ function extract(inputPath, format, onProgress) {
   };
   const failWith = (msg) => {
     fs.unlink(inputPath, () => {});
+    // 取消/失败后清掉半成品输出
+    fs.unlink(outPath, () => {});
     return Promise.reject(new Error(msg));
   };
 
@@ -239,11 +264,11 @@ function extract(inputPath, format, onProgress) {
     return attempt(true).then(
       size => finish(size),
       err => {
-        if (err.fatal) return failWith(err.message);
+        if (err.fatal || err.keepMsg) return failWith(err.message);
         console.log(`[extract] stream copy 失败（源音轨与目标容器不兼容），回退重编码: ${path.basename(outPath)}`);
         return attempt(false).then(
           size => finish(size),
-          e2 => e2.fatal ? failWith(e2.message) : failWith('转码失败：文件可能损坏或不支持的编码')
+          e2 => (e2.fatal || e2.keepMsg) ? failWith(e2.message) : failWith('转码失败：文件可能损坏或不支持的编码')
         );
       }
     );
@@ -251,17 +276,23 @@ function extract(inputPath, format, onProgress) {
 
   return attempt(false).then(
     size => finish(size),
-    err => err.fatal ? failWith(err.message) : failWith('转码失败：文件可能损坏或不支持的编码')
+    err => (err.fatal || err.keepMsg) ? failWith(err.message) : failWith('转码失败：文件可能损坏或不支持的编码')
   );
 }
 
 // ---------- 转码统一入口：排队 → 执行 → 更新进度任务 ----------
 async function runExtract(fullPath, format, jobId, job, label) {
   await acquireSlot(label);
-  job.status = 'transcoding';
-  console.log(`[extract] 开始 ${format}: ${label} (并发 ${activeExtracts}/${MAX_EXTRACT_JOBS})`);
   try {
-    const result = await extract(fullPath, format, pct => { job.pct = pct; });
+    if (job.cancelled) {
+      job.status = 'failed';
+      job.error = '已取消';
+      job.finishedAt = Date.now();
+      throw Object.assign(new Error('已取消'), { keepMsg: true });
+    }
+    job.status = 'transcoding';
+    console.log(`[extract] 开始 ${format}: ${label} (并发 ${activeExtracts}/${MAX_EXTRACT_JOBS})`);
+    const result = await extract(fullPath, format, job);
     job.status = 'done';
     job.pct = 100;
     job.finishedAt = Date.now();
@@ -279,7 +310,10 @@ async function runExtract(fullPath, format, jobId, job, label) {
 // ================= API =================
 
 app.post('/api/extract', upload.single('video'), async (req, res) => {
-  if (!FFMPEG) return res.status(500).json({ error: '服务器未找到 FFmpeg：请安装 FFmpeg 并加入 PATH，或设置环境变量 FFMPEG_PATH' });
+  if (!FFMPEG) {
+    if (req.file) fs.unlink(req.file.path, () => {});
+    return res.status(500).json({ error: '服务器未找到 FFmpeg：请安装 FFmpeg 并加入 PATH，或设置环境变量 FFMPEG_PATH' });
+  }
   if (!req.file) return res.status(400).json({ error: '请上传视频文件' });
   const filePath = req.file?.path;
   if (!filePath || typeof filePath !== 'string') {
@@ -287,7 +321,10 @@ app.post('/api/extract', upload.single('video'), async (req, res) => {
     return res.status(400).json({ error: '服务器未正确接收文件，请重试' });
   }
   const { format = 'm4a' } = req.body;
-  if (!FORMAT_MAP[format]) return res.status(400).json({ error: '不支持的格式: ' + format });
+  if (!FORMAT_MAP[format]) {
+    fs.unlink(filePath, () => {});
+    return res.status(400).json({ error: '不支持的格式: ' + format });
+  }
 
   const { jobId, job } = ensureJob(req.body.jobId);
   const label = req.file.originalname || path.basename(filePath);
@@ -349,6 +386,12 @@ app.get('/api/progress/:id', (req, res) => {
   }, 600);
 
   req.on('close', () => clearInterval(timer));
+});
+
+// ---------- 取消进行中的转码 ----------
+app.post('/api/cancel/:id', (req, res) => {
+  const result = cancelJob(req.params.id);
+  res.status(result.ok ? 200 : 404).json(result);
 });
 
 // ---------- 分片上传 ----------
@@ -416,6 +459,9 @@ app.post('/api/finalize-upload', async (req, res) => {
   if (!uploadId || !UPLOAD_ID_RE.test(uploadId)) return res.status(400).json({ error: 'uploadId 非法' });
   const sess = uploadSessions.get(uploadId);
   if (!sess) return res.status(400).json({ error: '不存在此上传会话（可能已过期或服务重启过）' });
+  // 竞态防护：同一会话只允许一次 finalize
+  if (finalizingIds.has(uploadId)) return res.status(409).json({ error: '该上传正在合并中，请勿重复提交' });
+  finalizingIds.add(uploadId);
 
   const sessionDir = path.join(CHUNK_DIR, uploadId);
 
@@ -433,12 +479,14 @@ app.post('/api/finalize-upload', async (req, res) => {
   try {
     await mergeChunks(sessionDir, sess.totalChunks, mergedPath);
     uploadSessions.delete(uploadId);
-    fs.rmSync(sessionDir, { recursive: true, force: true }, () => {});
+    fs.rmSync(sessionDir, { recursive: true, force: true });
     console.log(`[merge] 合并完成: ${mergedName} (${sess.totalChunks} 分片)`);
     res.json({ ok: true, path: relPath });
   } catch (e) {
     fs.rmSync(mergedPath, { force: true }, () => {});
     res.status(500).json({ error: '合并失败：' + e.message });
+  } finally {
+    finalizingIds.delete(uploadId);
   }
 });
 
@@ -479,19 +527,35 @@ app.post('/api/extract-from-path', async (req, res) => {
 // ---------- 健康检查 ----------
 app.get('/api/health', (req, res) => res.json({
   ok: true,
-  version: '1.1.0',
+  version: '1.2.0',
   ffmpeg: !!FFMPEG,
   ffmpegResolved: FFMPEG,
   maxConcurrent: MAX_EXTRACT_JOBS,
 }));
 
-app.listen(PORT, '0.0.0.0', () => {
-  const { networkInterfaces } = require('os');
-  const ifs = networkInterfaces();
-  const ips = Object.values(ifs).flat().filter(i => !i.internal && i.family === 'IPv4').map(i => i.address);
-  console.log(`[audio-extractor] v1.1.0 已启动`);
-  console.log(`[audio-extractor] 本地: http://localhost:${PORT}`);
-  ips.forEach(ip => console.log(`[audio-extractor] 局域网: http://${ip}:${PORT}`));
-  console.log(`[audio-extractor] FFmpeg: ${FFMPEG ? FFMPEG : '⚠ 未找到！请安装并加入 PATH，或设置 FFMPEG_PATH'}`);
-  console.log(`[audio-extractor] 转码并发上限: ${MAX_EXTRACT_JOBS}`);
-});
+// ---------- 启动监听：端口被占用时自动顺延，最多尝试 PORT_RANGE 个 ----------
+let currentPort = BASE_PORT;
+function startListen() {
+  const server = app.listen(currentPort, BIND, () => {
+    const { networkInterfaces } = require('os');
+    const ifs = networkInterfaces();
+    const ips = Object.values(ifs).flat().filter(i => !i.internal && i.family === 'IPv4').map(i => i.address);
+    console.log(`[audio-extractor] v1.2.0 已启动`);
+    console.log(`[audio-extractor] 本地: http://localhost:${currentPort}`);
+    if (BIND === '0.0.0.0') ips.forEach(ip => console.log(`[audio-extractor] 局域网: http://${ip}:${currentPort}`));
+    else console.log('[audio-extractor] (仅本机可访问; 设 BIND=0.0.0.0 可开放局域网)');
+    console.log(`[audio-extractor] FFmpeg: ${FFMPEG ? FFMPEG : '⚠ 未找到！请安装并加入 PATH，或设置 FFMPEG_PATH'}`);
+    console.log(`[audio-extractor] 转码并发上限: ${MAX_EXTRACT_JOBS}`);
+  });
+  server.on('error', err => {
+    if (err.code === 'EADDRINUSE' && currentPort < BASE_PORT + PORT_RANGE) {
+      console.warn(`[audio-extractor] 端口 ${currentPort} 被占用，改用 ${currentPort + 1}`);
+      currentPort++;
+      startListen();
+    } else {
+      console.error(`[audio-extractor] 启动失败: ${err.message}`);
+      process.exitCode = 1;
+    }
+  });
+}
+startListen();
