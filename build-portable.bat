@@ -59,6 +59,7 @@ if exist "%PROJECT%ffmpeg-bin\ffmpeg.exe" (
 
 :: ---- 启动脚本与文档 ----
 if exist "%PROJECT%启动工具-最小化.bat" copy "%PROJECT%启动工具-最小化.bat" "%DIST%\" >nul
+if exist "%PROJECT%安装到桌面.bat" copy "%PROJECT%安装到桌面.bat" "%DIST%\" >nul
 if exist "%PROJECT%启动音频提取工具.bat" copy "%PROJECT%启动音频提取工具.bat" "%DIST%\" >nul
 if exist "%PROJECT%start.bat" copy "%PROJECT%start.bat" "%DIST%\" >nul
 if exist "%PROJECT%LICENSE" copy "%PROJECT%LICENSE" "%DIST%\" >nul
