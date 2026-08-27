@@ -1,0 +1,49 @@
+﻿==============================================
+ THIRD-PARTY SOFTWARE NOTICES
+ audio-extractor
+==============================================
+
+This product bundles and/or depends on the following third-party software.
+They remain under their own licenses; this project claims no ownership over them.
+
+----------------------------------------------
+1. FFmpeg
+----------------------------------------------
+  Version : 9.0.1 essentials build by gyan.dev (www.gyan.dev)
+            build configuration includes --enable-gpl --enable-version3,
+            therefore this binary is licensed under
+                GNU General Public License version 3
+            https://www.gnu.org/licenses/gpl-3.0.html
+  Project home : https://ffmpeg.org
+  Encoders used by this app: aac / libmp3lame / pcm_s16le / flac / libopus
+
+  HOW IT IS USED: audio-extractor bundles an UNMODIFIED copy of the official
+  ffmpeg.exe and launches it as a SEPARATE PROCESS via its command-line
+  interface ("arms-length" / mere aggregation use). The MIT license of
+  audio-extractor itself is unaffected.
+
+  SOURCE CODE OFFER: complete corresponding source code of FFmpeg is publicly
+  available at no charge:
+      https://ffmpeg.org/download.html
+      git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg   (tag: n9.0.1)
+  Build configuration of this binary is documented at:
+      https://www.gyan.dev/ffmpeg/builds/
+
+  FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
+
+----------------------------------------------
+2. Node.js runtime
+----------------------------------------------
+  Version : 22.x (node.exe shipped in the portable zip)
+  Home    : https://nodejs.org
+  License : MIT License
+            Copyright Node.js contributors. All rights reserved.
+            https://github.com/nodejs/node/blob/main/LICENSE
+
+----------------------------------------------
+3. npm packages (bundled in node_modules)
+----------------------------------------------
+  express  v5.x  - MIT - https://github.com/expressjs/express
+  multer   v2.x  - MIT - https://github.com/expressjs/multer
+  (and their transitive dependencies, each under its own MIT/BSD/Apache-style
+   license; see the LICENSE file inside each package folder)
