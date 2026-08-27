@@ -3,6 +3,7 @@ const multer = require('multer');
 const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 // ============================================================
 // 音频提取工具（版本号统一取自 package.json，bump 时只需改一处）
@@ -23,11 +24,30 @@ const VERSION = require('./package.json').version;
 
 // ---------- 目录常量 ----------
 const ROOT = __dirname;
-const UPLOAD_DIR = path.join(ROOT, 'tmp_uploads');
-const CHUNK_DIR = path.join(ROOT, 'tmp_chunks');
-for (const d of [UPLOAD_DIR, CHUNK_DIR]) {
-  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+
+// 临时目录可写自检：便携包解压到管理员创建的目录（如 D:\Tools）时，ACL 通常只给
+// Administrators 写权限，普通用户双击启动的服务会因 EPERM 无法写入临时文件（提取失败）。
+// 这里先探测可写性，不可写则回退到系统临时目录（%TEMP%\audio-extractor），保证开箱即用。
+function ensureWritableDir(dir) {
+  const probe = path.join(dir, `.wprobe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(probe, '');
+    fs.unlinkSync(probe);
+    return dir;
+  } catch (e) {
+    console.warn(`[server] ${dir} 不可写(${e.code})，已回退到系统临时目录`);
+    const fallback = path.join(os.tmpdir(), 'audio-extractor', path.basename(dir));
+    try {
+      fs.mkdirSync(fallback, { recursive: true });
+    } catch (_) { /* 最后兑底：原目录继续用，后续请求会报错 */ }
+    return fallback;
+  }
 }
+const UPLOAD_DIR = ensureWritableDir(path.join(ROOT, 'tmp_uploads'));
+const CHUNK_DIR = ensureWritableDir(path.join(ROOT, 'tmp_chunks'));
+console.log(`[server] 临时上传目录: ${UPLOAD_DIR}`);
+console.log(`[server] 临时分片目录: ${CHUNK_DIR}`);
 
 // ---------- FFmpeg 解析：环境变量 → PATH → 随包自带的 ffmpeg-bin → 本机默认路径 ----------
 function resolveFfmpegPath() {
@@ -160,6 +180,12 @@ app.use(express.static(path.join(ROOT, 'public')));
 function insideRoot(p) {
   const rp = path.resolve(p);
   return rp === ROOT || rp.startsWith(ROOT + path.sep);
+}
+
+// 临时目录范围检查（UPLOAD_DIR 可能回退到 %TEMP%\audio-extractor）
+function insideUploads(p) {
+  const rp = path.resolve(p);
+  return rp === UPLOAD_DIR || rp.startsWith(UPLOAD_DIR + path.sep);
 }
 
 // 安全会话 ID：只允许字母数字下划线连字符，防路径穿越
@@ -374,7 +400,7 @@ app.get('/api/download', (req, res) => {
   const safe = path.basename(raw);
   if (!safe) return res.status(400).send('Bad request');
   const file = path.join(UPLOAD_DIR, safe);
-  if (!insideRoot(file)) return res.status(400).send('Bad request');
+  if (!insideUploads(file)) return res.status(400).send('Bad request');
   if (!fs.existsSync(file)) return res.status(404).send('Not found');
   // 磁盘上是随机 hash 名；这里用原始文件名作下载名（中文自动 RFC5987 编码），根治 hash 怪名
   const dl = path.basename(String(req.query.name || '').trim().replace(/[\\/:*?"<>|\r\n]/g, '_'));
@@ -500,7 +526,7 @@ app.post('/api/finalize-upload', async (req, res) => {
 
   const mergedName = `upload_${uploadId}_${sess.filename}`;
   const mergedPath = path.join(UPLOAD_DIR, mergedName); // 绝对路径，不受启动目录影响
-  const relPath = path.relative(ROOT, mergedPath);
+  const relPath = path.relative(UPLOAD_DIR, mergedPath);
 
   try {
     await mergeChunks(sessionDir, sess.totalChunks, mergedPath);
@@ -529,8 +555,8 @@ app.post('/api/extract-from-path', async (req, res) => {
   const { filePath, format = 'm4a' } = req.body || {};
   if (!filePath || !FORMAT_MAP[format]) return res.status(400).json({ error: '参数错误' });
 
-  const fullPath = path.isAbsolute(filePath) ? filePath : path.join(ROOT, filePath);
-  if (!insideRoot(fullPath)) return res.status(403).json({ error: '路径越界，仅允许处理本工具目录内的文件' });
+  const fullPath = path.isAbsolute(filePath) ? filePath : path.join(UPLOAD_DIR, filePath);
+  if (!insideUploads(fullPath)) return res.status(403).json({ error: '路径越界，仅允许处理本工具临时目录内的文件' });
   if (!fs.existsSync(fullPath)) return res.status(404).json({ error: '文件不存在' });
 
   const { jobId, job } = ensureJob(req.body.jobId);
