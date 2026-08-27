@@ -1,23 +1,26 @@
 @echo off
 title Audio Extractor
-
 cd /d "%~dp0"
 
-where node >nul 2>nul
+:: Node.js: prefer bundled (portable package), fallback to PATH
+set "NODE_BIN=node"
+if exist "%~dp0node.exe" set "NODE_BIN=%~dp0node.exe"
+
+"%NODE_BIN%" --version >nul 2>nul
 if errorlevel 1 (
     echo [ERROR] Node.js not found
     pause
     exit /b 1
 )
 
-:: FFmpeg is auto-resolved by the server (FFMPEG_PATH → PATH → default location)
+:: FFmpeg is auto-resolved by the server (FFMPEG_PATH -> PATH -> default location)
 
 netstat -ano | findstr ":8912.*LISTENING" >nul 2>nul
 if not errorlevel 1 (
     goto open_browser
 )
 
-start "" cmd /c "node server.js"
+start "" cmd /c ""%NODE_BIN%" server.js"
 
 :wait
 timeout /t 1 /nobreak >nul

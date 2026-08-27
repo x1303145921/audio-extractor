@@ -1,36 +1,38 @@
 @echo off
-chcp 65001 >nul
-title éŸ³é¢‘æå–å·¥å…·
+chcp 936 >nul
+title ÒôÆµÌáÈ¡¹¤¾ß
 
 cd /d "%~dp0"
 
-:: ä¾èµ–æ£€æŸ¥
-where node >nul 2>nul
+:: ÓÅÏÈÊ¹ÓÃÍ¬Ä¿Â¼ Node.js£¨±ãĞ¯°ü£©£¬»ØÍË PATH
+set "NODE_BIN=node"
+if exist "%~dp0node.exe" set "NODE_BIN=%~dp0node.exe"
+
+"%NODE_BIN%" --version >nul 2>nul
 if errorlevel 1 (
-    echo [é”™è¯¯] æœªæ£€æµ‹åˆ° Node.jsï¼Œè¯·å…ˆå®‰è£… Node.js
+    echo [´íÎó] Î´¼ì²âµ½ Node.js£¬ÇëÏÈ°²×° Node.js
     pause
     exit /b 1
 )
-:: FFmpeg ç”±æœåŠ¡ç«¯è‡ªåŠ¨æ¢æµ‹ï¼ˆFFMPEG_PATH â†’ PATH â†’ é»˜è®¤ä½ç½®ï¼‰ï¼Œæœªæ‰¾åˆ°æ—¶é¡µé¢ä¼šç»™å‡ºæ˜ç¡®æç¤º
-
-:: æ£€æŸ¥ç«¯å£æ˜¯å¦å·²è¢«å ç”¨
+:: FFmpeg ÓÉ·şÎñ¶Ë×Ô¶¯Ì½²â£¨FFMPEG_PATH ¡ú PATH ¡ú Ä¬ÈÏÎ»ÖÃ£©£¬Î´ÕÒµ½Ê±Ò³Ãæ»á¸ø³öÃ÷È·ÌáÊ¾
+:: ¼ì²é¶Ë¿ÚÊÇ·ñÒÑ±»Õ¼ÓÃ
 netstat -ano | findstr ":8912.*LISTENING" >nul 2>nul
 if not errorlevel 1 (
-    echo [æç¤º] æœåŠ¡å·²åœ¨è¿è¡Œï¼Œæ­£åœ¨æ‰“å¼€æµè§ˆå™¨...
+    echo [ÌáÊ¾] ·şÎñÒÑÔÚÔËĞĞ£¬ÕıÔÚ´ò¿ªä¯ÀÀÆ÷...
     goto open_browser
 )
 
-:: åå°å¯åŠ¨ node æœåŠ¡
-start "" cmd /c "node server.js"
+:: ºóÌ¨Æô¶¯ node ·şÎñ
+start "" cmd /c ""%NODE_BIN%" server.js"
 
-:: ç­‰å¾…æœåŠ¡å°±ç»ªï¼ˆæœ€å¤šç­‰ 30 ç§’ï¼‰
+:: µÈ´ı·şÎñ¾ÍĞ÷£¨×î¶àµÈ 30 Ãë£©
 :wait
 timeout /t 1 /nobreak >nul
 powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8912/api/health' -UseBasicParsing; if ($r.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }"
 if errorlevel 1 (
     set /a count+=1
     if %count% gtr 30 (
-        echo [é”™è¯¯] æœåŠ¡å¯åŠ¨è¶…æ—¶ï¼Œè¯·æ£€æŸ¥æ˜¯å¦æœ‰é”™è¯¯æç¤º
+        echo [´íÎó] ·şÎñÆô¶¯³¬Ê±£¬Çë¼ì²éÊÇ·ñÓĞ´íÎóÌáÊ¾
         pause
         exit /b 1
     )
@@ -38,9 +40,9 @@ if errorlevel 1 (
 )
 
 :open_browser
-:: ç”¨ PowerShell æ‰“å¼€é»˜è®¤æµè§ˆå™¨ï¼ˆæ¯” start æ›´å¯é ï¼‰
+:: ÓÃ PowerShell ´ò¿ªÄ¬ÈÏä¯ÀÀÆ÷£¨±È start ¸ü¿É¿¿£©
 powershell -Command "Start-Process 'http://localhost:8912'"
 
-echo [å·²å¯åŠ¨] éŸ³é¢‘æå–å·¥å…·å·²å°±ç»ª
-echo æœåŠ¡åœ°å€ï¼šhttp://localhost:8912
-echo å…³é—­æ­¤çª—å£å°†åœæ­¢æœåŠ¡
+echo [ÒÑÆô¶¯] ÒôÆµÌáÈ¡¹¤¾ßÒÑ¾ÍĞ÷
+echo ·şÎñµØÖ·£ºhttp://localhost:8912
+echo ¹Ø±Õ´Ë´°¿Ú½«Í£Ö¹·şÎñ
