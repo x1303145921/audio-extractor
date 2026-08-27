@@ -1,21 +1,28 @@
 // ============================================================
 // audio-extractor - local video to audio converter (web UI)
-// Release version. All messages in English by design:
+//
+// SPDX-License-Identifier: MIT
+// This file is part of audio-extractor, MIT licensed.
+// Bundled FFmpeg is a separate unmodified binary, invoked as an
+// external process; see THIRD-PARTY-NOTICES.txt.
+//
+// All user-facing messages are in English by design:
 // avoids CMD/codepage mojibake on non-Chinese Windows systems.
 //
 // FFmpeg lookup chain : ./ffmpeg.exe -> %FFMPEG_PATH% -> PATH
 // Default bind        : 127.0.0.1 (set AUDIO_EXTRACTOR_LAN=1 for LAN)
 // Port                : starts at AUDIO_EXTRACTOR_PORT or 8912,
 //                       auto-increments if busy.
+// Double-instance safe: a lock file guards temp-dir cleanup so two
+// copies of the app never delete each other's in-flight files.
 // ============================================================
 'use strict';
 
 const express = require('express');
 const multer = require('multer');
-const { spawn, exec } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const net = require('net');
 
 const app = express();
 const START_PORT = parseInt(process.env.AUDIO_EXTRACTOR_PORT || '8912', 10);
@@ -42,7 +49,7 @@ function resolveFfmpeg() {
 const FFMPEG = resolveFfmpeg();
 
 function verifyFfmpeg(cb) {
-  const ff = spawn(FFMPEG, ['-version']);
+  const ff = spawn(FFMPEG, ['-version'], { windowsHide: true });
   let out = '';
   ff.stdout.on('data', d => { out += d.toString(); });
   ff.on('error', () => cb(new Error(
@@ -62,14 +69,39 @@ const CHUNK_DIR = path.join(ROOT, 'tmp_chunks');
 for (const d of [TMP_UPLOADS, CHUNK_DIR]) {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 }
-// clean leftovers from a previous run at startup
-for (const d of [TMP_UPLOADS, CHUNK_DIR]) {
+
+const LOCK_FILE = path.join(ROOT, 'audio-extractor.lock');
+
+// Remove leftovers from previous runs, but never while another live
+// instance owns them (double-click protection).
+function cleanupTempIfSolo() {
+  let solo = true;
   try {
-    for (const f of fs.readdirSync(d)) {
-      fs.rmSync(path.join(d, f), { recursive: true, force: true });
+    const owner = parseInt(fs.readFileSync(LOCK_FILE, 'utf8').trim(), 10);
+    if (owner && owner !== process.pid) {
+      try { process.kill(owner, 0); solo = false; } catch (_) { /* dead owner */ }
     }
-  } catch (_) { /* best effort */ }
+  } catch (_) { /* no lock yet */ }
+
+  if (!solo) {
+    console.log('[i] Another instance seems to be running; keeping its temp files.');
+    return;
+  }
+  for (const d of [TMP_UPLOADS, CHUNK_DIR]) {
+    try {
+      for (const f of fs.readdirSync(d)) {
+        fs.rmSync(path.join(d, f), { recursive: true, force: true });
+      }
+    } catch (_) { /* best effort */ }
+  }
+  try { fs.writeFileSync(LOCK_FILE, String(process.pid)); } catch (_) { /* best effort */ }
 }
+
+process.on('exit', () => {
+  try {
+    if (fs.readFileSync(LOCK_FILE, 'utf8').trim() === String(process.pid)) fs.unlinkSync(LOCK_FILE);
+  } catch (_) { /* best effort */ }
+});
 
 const upload = multer({
   dest: TMP_UPLOADS,
@@ -89,6 +121,25 @@ function withExt(inputPath, ext) {
   // ext already includes its leading dot (.m4a / .mp3 / ...)
   const base = inputPath.replace(/\.[^.]+$/, '').replace(/\.+$/, '');
   return base + ext;
+}
+
+// Some HTTP clients/multipart parsers deliver non-ASCII filenames as
+// latin1-mangled text ("娴嬭瘯..." style). Detect and heal when possible;
+// correctly-received names (CJK etc.) are left untouched.
+function fixFilenameEncoding(name) {
+  if (!name || !/[^\x00-\x7F]/.test(name)) return name;
+  // latin1-mangled UTF-8 leaves chars in U+0080..U+00FF (incl. C1 controls);
+  // correctly-received names (CJK etc.) never match and are left untouched.
+  if (!/[\u0080-\u00FF]/.test(name)) return name;
+  try {
+    const fixed = Buffer.from(name, 'latin1').toString('utf8');
+    if (!fixed.includes('\uFFFD') && /\S/.test(fixed)) return fixed;
+  } catch (_) { /* keep as-is */ }
+  return name;
+}
+
+function sanitizeBaseName(name) {
+  return String(name || '').replace(/[\\/:*?"<>|]/g, '_').slice(0, 150);
 }
 
 function timeToSec(s) {
@@ -118,15 +169,8 @@ function extract(inputPath, format) {
     activeJobs++;
     const ff = spawn(FFMPEG, args, { windowsHide: true });
     let stderr = '';
-    let duration = 0;
 
-    ff.stderr.on('data', d => {
-      stderr += d.toString();
-      if (!duration) {
-        const dm = stderr.match(/Duration:\s*([\d:.]+)/);
-        if (dm) duration = timeToSec(dm[1]);
-      }
-    });
+    ff.stderr.on('data', d => { stderr += d.toString(); });
 
     ff.on('error', err => {
       activeJobs--;
@@ -173,8 +217,7 @@ app.post('/api/extract', upload.single('video'), async (req, res) => {
   }
   try {
     const result = await extract(req.file.path, req.body.format || 'm4a');
-    const base = path.basename(req.file.originalname, path.extname(req.file.originalname))
-      .replace(/[\\/:*?"<>|]/g, '_') || 'audio';
+    const base = sanitizeBaseName(fixFilenameEncoding(path.basename(req.file.originalname, path.extname(req.file.originalname)))) || 'audio';
     res.json({
       ok: true,
       progress: 100,
@@ -199,11 +242,14 @@ app.get('/api/download', (req, res) => {
 });
 
 // chunked upload (used for files > 50 MB from the browser)
+const UPLOAD_ID_RE = /^[A-Za-z0-9-]{6,64}$/; // prevents path tricks via uploadId
 const uploadSessions = new Map();
 
 app.post('/api/upload-chunk', upload.single('chunk'), (req, res) => {
   const { uploadId, chunkIndex, totalChunks, filename, fileSize } = req.body;
-  if (!uploadId || !req.file) { res.status(400).json({ error: 'Missing parameters.' }); return; }
+  if (!UPLOAD_ID_RE.test(uploadId || '') || !req.file) {
+    res.status(400).json({ error: 'Missing or invalid parameters.' }); return;
+  }
   if (!isLoopback(req) && !LAN_MODE) { res.status(403).json({ error: 'Forbidden.' }); return; }
 
   const sessionDir = path.join(CHUNK_DIR, uploadId);
@@ -211,7 +257,11 @@ app.post('/api/upload-chunk', upload.single('chunk'), (req, res) => {
   fs.renameSync(req.file.path, path.join(sessionDir, 'chunk_' + chunkIndex));
 
   if (!uploadSessions.has(uploadId)) {
-    uploadSessions.set(uploadId, { filename, fileSize: +fileSize, totalChunks: +totalChunks });
+    uploadSessions.set(uploadId, {
+      filename: sanitizeBaseName(filename) || 'video',
+      fileSize: +fileSize,
+      totalChunks: +totalChunks
+    });
   }
   const received = fs.readdirSync(sessionDir).filter(f => f.indexOf('chunk_') === 0).length;
   res.json({ ok: true, received, total: +totalChunks });
@@ -219,6 +269,7 @@ app.post('/api/upload-chunk', upload.single('chunk'), (req, res) => {
 
 app.post('/api/finalize-upload', (req, res) => {
   const { uploadId } = req.body;
+  if (!UPLOAD_ID_RE.test(uploadId || '')) { res.status(400).json({ error: 'Invalid parameters.' }); return; }
   if (!isLoopback(req) && !LAN_MODE) { res.status(403).json({ error: 'Forbidden.' }); return; }
   const sess = uploadSessions.get(uploadId);
   if (!sess) { res.status(400).json({ error: 'Unknown upload session.' }); return; }
@@ -226,11 +277,11 @@ app.post('/api/finalize-upload', (req, res) => {
   const sessionDir = path.join(CHUNK_DIR, uploadId);
   const mergedPath = path.join(TMP_UPLOADS, 'up_' + uploadId + '_' + sess.filename.replace(/[\\/:*?"<>|]/g, '_'));
   const ws = fs.createWriteStream(mergedPath);
-  let ok = true;
+  let missing = false;
 
   for (let i = 0; i < sess.totalChunks; i++) {
     const cp = path.join(sessionDir, 'chunk_' + i);
-    if (!fs.existsSync(cp)) { ok = false; break; }
+    if (!fs.existsSync(cp)) { missing = true; break; }
     ws.write(fs.readFileSync(cp));
   }
   ws.end();
@@ -238,7 +289,7 @@ app.post('/api/finalize-upload', (req, res) => {
   ws.on('finish', () => {
     uploadSessions.delete(uploadId);
     fs.rmSync(sessionDir, { recursive: true, force: true });
-    if (!ok) { res.status(400).json({ error: 'Missing chunk(s).' }); return; }
+    if (missing) { res.status(400).json({ error: 'Missing chunk(s).' }); return; }
     res.json({ ok: true, path: mergedPath });
   });
   ws.on('error', e => res.status(500).json({ error: e.message }));
@@ -250,13 +301,13 @@ app.post('/api/extract-from-path', async (req, res) => {
   //   LAN clients (LAN=1)   -> only paths inside this app's tmp_uploads dir
   const { filePath, format = 'm4a' } = req.body || {};
   const requested = filePath || '';
-  const fullLoopbackPass = isLoopback(req);
-  if (!fullLoopbackPass && !LAN_MODE) {
+  const loopbackPass = isLoopback(req);
+  if (!loopbackPass && !LAN_MODE) {
     res.status(403).json({ error: 'This endpoint accepts localhost calls only.' }); return;
   }
   if (!requested || !FORMAT_MAP[format]) { res.status(400).json({ error: 'Bad parameters.' }); return; }
-  let full = path.isAbsolute(requested) ? requested : path.join(ROOT, requested);
-  if (!fullLoopbackPass) {
+  const full = path.isAbsolute(requested) ? requested : path.join(ROOT, requested);
+  if (!loopbackPass) {
     const resolved = path.resolve(full);
     if (!resolved.startsWith(TMP_UPLOADS + path.sep)) {
       res.status(403).json({ error: 'Forbidden path.' }); return;
@@ -266,7 +317,7 @@ app.post('/api/extract-from-path', async (req, res) => {
   if (activeJobs >= MAX_CONCURRENT_JOBS) { res.status(429).json({ error: 'Server busy.' }); return; }
   try {
     const result = await extract(full, format);
-    const safeName = path.basename(full, path.extname(full)).replace(/[\\/:*?"<>|]/g, '_') || 'audio';
+    const safeName = sanitizeBaseName(path.basename(full, path.extname(full))) || 'audio';
     res.json({
       ok: true,
       downloadName: safeName + FORMAT_MAP[format].ext,
@@ -288,11 +339,15 @@ app.get('/api/health', (req, res) => res.json({
 // ---------- listen with port fallback ----------
 function openBrowser(url) {
   if (process.env.AUDIO_EXTRACTOR_NO_OPEN === '1') return;
-  exec('powershell -NoProfile -Command "Start-Process \'' + url + '\'"', () => {});
+  try {
+    const child = spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore', windowsHide: true });
+    child.unref();
+  } catch (_) { /* browser open is best-effort */ }
 }
 
 function listen(port, triesLeft) {
   const server = app.listen(port, HOST, () => {
+    cleanupTempIfSolo();
     const shownHost = LAN_MODE ? hostIps() : ['127.0.0.1'];
     console.log('');
     console.log('  audio-extractor is running.');
@@ -328,7 +383,7 @@ console.log('[init] ffmpeg : ' + (FFMPEG === 'ffmpeg' ? '(from PATH)' : FFMPEG))
 verifyFfmpeg(err => {
   if (err) {
     console.error('[FATAL] ' + err.message);
-    try { require('fs').writeFileSync(path.join(ROOT, 'ffmpeg-error.txt'), err.message); } catch (_) {}
+    try { fs.writeFileSync(path.join(ROOT, 'ffmpeg-error.txt'), err.message); } catch (_) {}
     process.exit(1);
   } else {
     listen(START_PORT, MAX_PORT_TRIES);

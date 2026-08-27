@@ -24,5 +24,7 @@
 
 【系统要求】 Windows 10 / 11（64 位），无需安装任何依赖，无需管理员权限。
 
-【开源与许可】 本工具源码以 MIT 许可发布；FFmpeg 为第三方软件（LGPL），
-  详见 THIRD-PARTY-NOTICES.txt。
+【项目主页】 https://github.com/x1303145921/audio-extractor
+
+【开源与许可】 本工具源码以 MIT 许可发布；FFmpeg 为第三方软件（GPL v3 构建，
+  独立进程调用），详见 THIRD-PARTY-NOTICES.txt。

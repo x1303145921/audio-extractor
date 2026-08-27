@@ -60,6 +60,7 @@ audio-extractor/
 ├── node.exe           # 内置运行时 (Node 22)
 ├── ffmpeg.exe         # 内置转码引擎 (FFmpeg essentials build)
 ├── server.js          # 服务端源码
+├── lan.bat            # 局域网模式一键启动（可选）
 ├── public/            # Web 界面 (HTML/CSS/JS + PWA)
 ├── node_modules/      # 运行依赖 (express, multer)
 ├── README.txt         # 本说明（zip 内简版）
@@ -108,7 +109,7 @@ ffmpeg -i input.mp4 -vn -acodec libmp3lame -q:a 2 output.mp3   # MP3：重编码
 ## License
 
 本项目代码以 [MIT](LICENSE) 许可开源。
-FFmpeg 属于第三方软件，遵循其原始许可（LGPL），见 [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)。
+FFmpeg 属于第三方软件，（gyan.dev essentials 构建，配置含 --enable-gpl --enable-version3，即 GPL v3 许可；本工具以未修改二进制+独立进程方式调用），声明与源码获取方式见 [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)。
 
 ## 反馈 Issues
 

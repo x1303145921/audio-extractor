@@ -17,7 +17,7 @@ if not exist "%~dp0build.local.bat" (
 call "%~dp0build.local.bat"
 
 :: bump VERSION when releasing
-set VERSION=0.1.0
+set VERSION=0.1.1
 set NAME=audio-extractor-v%VERSION%-win-x64
 set OUT=dist\%NAME%
 
