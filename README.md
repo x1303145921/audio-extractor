@@ -22,6 +22,8 @@ A local video-to-audio extractor for Windows. Drag & drop, five output formats, 
 ## 快速开始 Quick Start
 
 1. 下载 Release 中的 `audio-extractor-vX.X.X-win-x64.zip`
+   > 国内网络直连 Release 资产较慢时，可在链接前加镜像前缀加速：
+   > `https://ghfast.top/https://github.com/...`，或使用 Watt Toolkit 等加速工具。
 2. 解压到任意目录（建议路径不含特殊字符）
 3. 双击 **`start.bat`**
    - 首次运行如遇 SmartScreen 提示：点击「更多信息」→「仍要运行」
