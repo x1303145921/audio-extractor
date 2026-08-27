@@ -53,7 +53,6 @@
   }
   .logo {
     width: 52px; height: 52px;
-    background: linear-gradient(140deg, var(--accent), var(--accent2));
     border-radius: 14px;
     display: flex;
     align-items: center;
@@ -62,7 +61,7 @@
     flex-shrink: 0;
     overflow: hidden;
   }
-  .logo img { width: 30px; height: 30px; object-fit: contain; }
+  .logo img { width: 52px; height: 52px; object-fit: contain; }
   .header-text h1 { font-size: 20px; font-weight: 650; }
   .header-text p { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
@@ -518,7 +517,7 @@ function setProgress(pct, label) {
 function renderResults(total) {
   resultsEl.classList.toggle('show', total > 0);
   const summary = total > 0
-    ? `<div class="results-summary"><span>${batchDone ? '本批完成' : '已完成'} ${total} 个</span><button type="button" class="results-clear" id="resultsClearBtn" aria-label="清空下载列表">清空列表</button></div>`
+    ? `<div class="results-summary"><span>已生成 ${total} 个文件</span><button type="button" class="results-clear" id="resultsClearBtn" aria-label="清空下载列表">清空列表</button></div>`
     : '';
   const rows = completed.map((c, i) => `
     <div class="result-item">
@@ -587,7 +586,7 @@ function renderFiles() {
       <div class="file-chip-icon">${videoIcon()}</div>
       <div class="file-chip-info">
         <div class="file-chip-name" title="${esc(item.name)}">${esc(item.name)}</div>
-        <div class="file-chip-meta">${(item.size/1024/1024).toFixed(1)} MB · ${esc(item.downloadName || '')}</div>
+        <div class="file-chip-meta">${formatBytes(item.size)} · ${esc(item.downloadName || '')}</div>
       </div>
       ${badge}
       <button class="file-chip-remove" data-i="${i}" title="移除">${removeIcon()}</button>
