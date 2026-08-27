@@ -307,6 +307,19 @@
   .result-item-info { flex: 1; min-width: 0; }
   .result-item-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .result-item-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .result-item-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(45,212,168,.15);
+    border: 1px solid rgba(45,212,168,.35);
+    color: var(--ok);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .4px;
+    vertical-align: 1px;
+  }
   .download-mini {
     padding: 8px 14px;
     background: var(--ok); color: #0b0d13;
@@ -519,18 +532,29 @@ function renderResults(total) {
   const summary = total > 0
     ? `<div class="results-summary"><span>已生成 ${total} 个文件</span><button type="button" class="results-clear" id="resultsClearBtn" aria-label="清空下载列表">清空列表</button></div>`
     : '';
-  const rows = completed.map((c, i) => `
+  const rows = completed.map((c, i) => {
+    const ext = (String(c.name).match(/\.([A-Za-z0-9]{2,4})$/) || [])[1] || '';
+    const badge = ext ? `<span class="result-item-badge">${esc(ext.toUpperCase())}</span>` : '';
+    return `
     <div class="result-item">
       <div class="result-item-icon">${checkIcon()}</div>
       <div class="result-item-info">
         <div class="result-item-name" title="${esc(c.name)}">${esc(c.name)}</div>
-        <div class="result-item-meta">${formatBytes(c.size)} · ${i+1}/${total}</div>
+        <div class="result-item-meta">${formatBytes(c.size)} · ${i+1}/${total}${badge}</div>
       </div>
       <a class="download-mini" href="${c.url}" download="${esc(c.name)}" aria-label="下载 ${esc(c.name)}">下载</a>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   resultsEl.innerHTML = summary + rows;
 }
 resultsEl.addEventListener('click', e => {
+  const dlBtn = e.target.closest && e.target.closest('.download-mini');
+  if (dlBtn) {
+    const orig = dlBtn.textContent;
+    dlBtn.textContent = '已开始 ✓';
+    setTimeout(() => { if (dlBtn.isConnected) dlBtn.textContent = orig; }, 1600);
+    return;
+  }
   if (e.target && e.target.id === 'resultsClearBtn') {
     completed.length = 0;
     renderResults(0);
@@ -581,12 +605,12 @@ function renderFiles() {
     else if (item.status === 'uploading') badge = `<span class="file-chip-status status-uploading">上传中</span>`;
     else if (item.status === 'processing') badge = `<span class="file-chip-status status-processing">转码 ${item.pct|0}%</span>`;
     else if (item.status === 'done') badge = `<span class="file-chip-status status-done">已完成</span>`;
-    else if (item.status === 'fail') badge = `<span class="file-chip-status status-fail"${item.errMsg ? ` title="${esc(item.errMsg)}"` : ''}>失败 ⓘ</span>`;
+    else if (item.status === 'fail') badge = `<span class="file-chip-status status-fail"${item.errMsg ? ` title="${esc(item.errMsg)}"` : ''}>失败 </span>`;
     return `<div class="file-chip">
       <div class="file-chip-icon">${videoIcon()}</div>
       <div class="file-chip-info">
         <div class="file-chip-name" title="${esc(item.name)}">${esc(item.name)}</div>
-        <div class="file-chip-meta">${formatBytes(item.size)} · ${esc(item.downloadName || '')}</div>
+        <div class="file-chip-meta">${item.status === 'done' && item.downloadName ? `${formatBytes(item.size)} → ${esc(item.downloadName)}` : formatBytes(item.size)}</div>
       </div>
       ${badge}
       <button class="file-chip-remove" data-i="${i}" title="移除">${removeIcon()}</button>

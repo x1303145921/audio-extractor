@@ -123,6 +123,23 @@ const upload = multer({
 
 function withExt(inputPath, ext) { return inputPath.replace(/\.[^.]+$/, '') + '.' + ext; }
 
+// multer/busboy 把 multipart 里的 filename 按 Latin-1 解码，UTF-8 中文会变成 mojibake
+// （如「我的测试视频」→「茅聨麓忙聢聽忙庐聭」）。此函数还原被误解码的文件名：
+// 仅当字符串“含高位字符且全部码点 ≤ 0xFF”（Latin-1 误解码特征）时才尝试还原，
+// 正常的 Unicode 文件名 / 纯 ASCII 名原样返回，绝不误伤。
+function fixUtf8Name(name) {
+  if (!name) return name;
+  let hasHigh = false, allLatin1 = true;
+  for (const ch of String(name)) {
+    const cp = ch.codePointAt(0);
+    if (cp > 0xFF) { allLatin1 = false; break; }
+    if (cp > 0x7F) hasHigh = true;
+  }
+  if (!hasHigh || !allLatin1) return name;
+  const fixed = Buffer.from(name, 'latin1').toString('utf8');
+  return fixed.includes('\uFFFD') ? name : fixed;
+}
+
 const FORMAT_MAP = {
   m4a:  { codec: 'aac',       ext: '.m4a',  args: ['-acodec', 'aac',        '-b:a', '192k'] },
   mp3:  { codec: 'libmp3lame', ext: '.mp3',  args: ['-acodec', 'libmp3lame', '-q:a', '2']    },
@@ -333,11 +350,11 @@ app.post('/api/extract', upload.single('video'), async (req, res) => {
   }
 
   const { jobId, job } = ensureJob(req.body.jobId);
-  const label = req.file.originalname || path.basename(filePath);
+  const label = fixUtf8Name(req.file.originalname) || path.basename(filePath);
 
   try {
     const result = await runExtract(filePath, format, jobId, job, label);
-    const basename = path.basename(req.file.originalname, path.extname(req.file.originalname));
+    const basename = path.basename(fixUtf8Name(req.file.originalname), path.extname(fixUtf8Name(req.file.originalname)));
     const dlName = basename + FORMAT_MAP[format].ext;
     res.json({
       ok: true,
@@ -410,7 +427,7 @@ app.post('/api/upload-chunk', upload.single('chunk'), (req, res) => {
   if (req.file == null) return res.status(400).json({ error: '缺少参数' });
   if (!uploadSessions.has(uploadId)) {
     uploadSessions.set(uploadId, {
-      filename: path.basename(String(filename || 'video')),
+      filename: fixUtf8Name(path.basename(String(filename || 'video'))),
       fileSize: +fileSize || 0,
       totalChunks: Math.max(1, +totalChunks || 1),
       received: 0,
