@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 
 // ============================================================
-// 音频提取工具 v1.3.0
+// 音频提取工具（版本号统一取自 package.json，bump 时只需改一处）
 // 路径全部基于 __dirname，与进程启动目录无关
 // 环境变量：
 //   PORT              监听端口（默认 8912）
@@ -19,7 +19,7 @@ const app = express();
 const BIND = process.env.BIND || '0.0.0.0';
 const BASE_PORT = Math.max(1, parseInt(process.env.PORT || '8912', 10));
 const PORT_RANGE = 10; // 端口被占用时向后顺延的最大尝试数
-const VERSION = '1.3.0';
+const VERSION = require('./package.json').version;
 
 // ---------- 目录常量 ----------
 const ROOT = __dirname;
