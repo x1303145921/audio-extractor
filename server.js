@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 
 // ============================================================
-// 音频提取工具 v1.1.0
+// 音频提取工具 v1.3.0
 // 路径全部基于 __dirname，与进程启动目录无关
 // 环境变量：
 //   PORT              监听端口（默认 8912）
@@ -19,6 +19,7 @@ const app = express();
 const BIND = process.env.BIND || '0.0.0.0';
 const BASE_PORT = Math.max(1, parseInt(process.env.PORT || '8912', 10));
 const PORT_RANGE = 10; // 端口被占用时向后顺延的最大尝试数
+const VERSION = '1.3.0';
 
 // ---------- 目录常量 ----------
 const ROOT = __dirname;
@@ -344,7 +345,7 @@ app.post('/api/extract', upload.single('video'), async (req, res) => {
       progress: 100,
       downloadName: dlName,
       size: result.size,
-      outputPath: '/api/download?file=' + encodeURIComponent(path.basename(result.path)),
+      outputPath: '/api/download?file=' + encodeURIComponent(path.basename(result.path)) + '&name=' + encodeURIComponent(dlName),
     });
   } catch (e) {
     res.status(500).json({ error: e.message, jobId });
@@ -358,7 +359,10 @@ app.get('/api/download', (req, res) => {
   const file = path.join(UPLOAD_DIR, safe);
   if (!insideRoot(file)) return res.status(400).send('Bad request');
   if (!fs.existsSync(file)) return res.status(404).send('Not found');
-  res.download(file);
+  // 磁盘上是随机 hash 名；这里用原始文件名作下载名（中文自动 RFC5987 编码），根治 hash 怪名
+  const dl = path.basename(String(req.query.name || '').trim().replace(/[\\/:*?"<>|\r\n]/g, '_'));
+  if (dl) res.download(file, dl);
+  else res.download(file);
 });
 
 // ---------- 实时转码进度（SSE） ----------
@@ -522,17 +526,29 @@ app.post('/api/extract-from-path', async (req, res) => {
       jobId,
       downloadName: dlName,
       size: result.size,
-      outputPath: '/api/download?file=' + encodeURIComponent(path.basename(result.path)),
+      outputPath: '/api/download?file=' + encodeURIComponent(path.basename(result.path)) + '&name=' + encodeURIComponent(dlName),
     });
   } catch (e) {
     res.status(500).json({ error: e.message, jobId });
   }
 });
 
+// ---------- 退出服务（仅限本机触发；配合桌面快捷方式/静默启动器使用） ----------
+const LOOPBACK_RE = /^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/;
+function shutdownHandler(req, res) {
+  const ra = req.socket.remoteAddress || '';
+  if (!LOOPBACK_RE.test(ra)) return res.status(403).json({ error: '仅允许本机触发退出' });
+  console.log('[audio-extractor] 收到本机退出请求，服务即将关闭');
+  res.json({ ok: true, bye: true });
+  setTimeout(() => process.exit(0), 250);
+}
+app.get('/api/quit', shutdownHandler);
+app.post('/api/quit', shutdownHandler);
+
 // ---------- 健康检查 ----------
 app.get('/api/health', (req, res) => res.json({
   ok: true,
-  version: '1.2.0',
+  version: VERSION,
   ffmpeg: !!FFMPEG,
   ffmpegResolved: FFMPEG,
   maxConcurrent: MAX_EXTRACT_JOBS,
@@ -545,7 +561,7 @@ function startListen() {
     const { networkInterfaces } = require('os');
     const ifs = networkInterfaces();
     const ips = Object.values(ifs).flat().filter(i => !i.internal && i.family === 'IPv4').map(i => i.address);
-    console.log(`[audio-extractor] v1.2.0 已启动`);
+    console.log(`[audio-extractor] v${VERSION} 已启动`);
     console.log(`[audio-extractor] 本地: http://localhost:${currentPort}`);
     if (BIND === '0.0.0.0') ips.forEach(ip => console.log(`[audio-extractor] 局域网: http://${ip}:${currentPort}`));
     else console.log('[audio-extractor] (仅本机可访问; 设 BIND=0.0.0.0 可开放局域网)');

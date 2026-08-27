@@ -316,6 +316,22 @@
     text-decoration: none; white-space: nowrap;
   }
   .download-mini:hover { filter: brightness(1.08); }
+  .download-mini:active { transform: scale(.96); }
+  .footer .quit-link {
+    margin-left: 10px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--accent);
+    font-size: 11px;
+    font-family: inherit;
+    padding: 3px 10px;
+    cursor: pointer;
+    transition: all .15s;
+    vertical-align: middle;
+  }
+  .footer .quit-link:hover { border-color: var(--err); color: var(--err); }
+  .footer .quit-link:disabled { opacity: .5; cursor: wait; }
 
   /* cancel */
   .btn-cancel {
@@ -435,7 +451,7 @@
     </div>
   </div>
 
-  <p class="footer">基于 FFmpeg 本地转码 · 不依赖任何在线服务 · 支持最大 4GB 文件</p>
+  <p class="footer" id="footerLine">基于 FFmpeg 本地转码 · 不依赖任何在线服务 · 支持最大 4GB 文件<span id="verSpan"></span></p>
 </div>
 
 <script>
@@ -486,6 +502,10 @@ let batchDone = false;  // 当批是否已结束(控制汇总条文案)
 function checkIcon() {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 }
+// HTML 转义：文件名来自用户选择，插入页面时防止引号/尖括号破坏结构
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
 function setProgress(pct, label) {
   if (pct != null) {
     const v = Math.max(0, Math.min(100, Math.round(pct)));
@@ -504,10 +524,10 @@ function renderResults(total) {
     <div class="result-item">
       <div class="result-item-icon">${checkIcon()}</div>
       <div class="result-item-info">
-        <div class="result-item-name" title="${c.name}">${c.name}</div>
+        <div class="result-item-name" title="${esc(c.name)}">${esc(c.name)}</div>
         <div class="result-item-meta">${formatBytes(c.size)} · ${i+1}/${total}</div>
       </div>
-      <a class="download-mini" href="${c.url}" download="${c.name}" aria-label="下载 ${c.name}">下载</a>
+      <a class="download-mini" href="${c.url}" download="${esc(c.name)}" aria-label="下载 ${esc(c.name)}">下载</a>
     </div>`).join('');
   resultsEl.innerHTML = summary + rows;
 }
@@ -562,12 +582,12 @@ function renderFiles() {
     else if (item.status === 'uploading') badge = `<span class="file-chip-status status-uploading">上传中</span>`;
     else if (item.status === 'processing') badge = `<span class="file-chip-status status-processing">转码 ${item.pct|0}%</span>`;
     else if (item.status === 'done') badge = `<span class="file-chip-status status-done">已完成</span>`;
-    else if (item.status === 'fail') badge = `<span class="file-chip-status status-fail"${item.errMsg ? ` title="${item.errMsg.replace(/"/g,'&quot;')}"` : ''}>失败 ⓘ</span>`;
+    else if (item.status === 'fail') badge = `<span class="file-chip-status status-fail"${item.errMsg ? ` title="${esc(item.errMsg)}"` : ''}>失败 ⓘ</span>`;
     return `<div class="file-chip">
       <div class="file-chip-icon">${videoIcon()}</div>
       <div class="file-chip-info">
-        <div class="file-chip-name" title="${item.name}">${item.name}</div>
-        <div class="file-chip-meta">${(item.size/1024/1024).toFixed(1)} MB · ${item.downloadName || ''}</div>
+        <div class="file-chip-name" title="${esc(item.name)}">${esc(item.name)}</div>
+        <div class="file-chip-meta">${(item.size/1024/1024).toFixed(1)} MB · ${esc(item.downloadName || '')}</div>
       </div>
       ${badge}
       <button class="file-chip-remove" data-i="${i}" title="移除">${removeIcon()}</button>
@@ -577,17 +597,25 @@ function renderFiles() {
 }
 
 function addFiles(items) {
-  for (const item of items) {
+  const arr = Array.from(items || []);
+  let added = 0;
+  for (const item of arr) {
     const ok = item.type && item.type.startsWith('video/') ||
       !item.type && /\.(mp4|mkv|avi|mov|flv|wmv|webm|ts|m4v)$/i.test(item.name);
     if (!ok) continue;
     // 去重：同名单同大小视为重复
     if (files.some(f => f.name === item.name && f.size === item.size)) continue;
     files.push({ file: item, status: 'pending', name: item.name, size: item.size });
+    added++;
+  }
+  if (added === 0 && arr.length > 0) {
+    errorText.textContent = '未识别到视频文件：支持 MP4 / MKV / AVI / MOV / WebM / TS 等常见格式';
+    errorMsg.classList.add('show');
+  } else {
+    errorMsg.classList.remove('show');
   }
   renderFiles();
   resultsEl.classList.remove('show');
-  errorMsg.classList.remove('show');
 }
 
 ['dragenter','dragover'].forEach(ev =>
@@ -765,6 +793,33 @@ cancelBtn.addEventListener('click', async () => {
 window.addEventListener('beforeunload', e => {
   if (processing) { e.preventDefault(); e.returnValue = ''; }
 });
+
+// 页脚：服务端版本号 + 本机访问时的「退出服务」入口（局域网/手机访问不显示）
+(function initFooter() {
+  const ver = document.getElementById('verSpan');
+  fetch('/api/health').then(r => r.json()).then(d => {
+    if (ver && d && d.version) ver.textContent = ' · v' + d.version;
+  }).catch(() => {});
+  const local = /^(127\.0\.0\.1|localhost|::1)$/.test(location.hostname);
+  if (!local) return;
+  const quit = document.createElement('button');
+  quit.type = 'button';
+  quit.className = 'quit-link';
+  quit.textContent = '退出服务';
+  quit.title = '停止后台服务（下次双击桌面图标可再次启动）';
+  quit.addEventListener('click', async () => {
+    if (!confirm('确定退出本地服务吗？')) return;
+    quit.disabled = true;
+    quit.textContent = '正在退出…';
+    try { await fetch('/api/quit', { method: 'POST' }); } catch (_) {}
+    setTimeout(() => {
+      document.title = '已退出';
+      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:inherit;color:#7a80a0;font-size:14px">服务已关闭，双击桌面图标即可重新启动</div>';
+    }, 500);
+  });
+  const foot = document.getElementById('footerLine');
+  if (foot) foot.appendChild(quit);
+})();
 </script>
 
 <div id="installBanner" style="display:none;position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);color:var(--fg);padding:10px 18px;border-radius:12px;font-size:13px;box-shadow:0 8px 28px rgba(0,0,0,.4);z-index:9;cursor:pointer;white-space:nowrap;font-family:inherit">

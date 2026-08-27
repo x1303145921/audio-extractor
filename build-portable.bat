@@ -1,64 +1,92 @@
 @echo off
-chcp 65001 >nul
-setlocal
+setlocal enabledelayedexpansion
 
 :: ============================================================
-::  éŸ³é¢‘æå–å™¨ - ä¾¿æºç‰ˆæ‰“åŒ…è„šæœ¬
-::  ç”¨æ³•ï¼šåŒå‡»è¿è¡Œï¼Œç”Ÿæˆ dist\éŸ³é¢‘æå–å™¨_vX.X.zip
+::  ÒôÆµÌáÈ¡¹¤¾ß - ÁãÒÀÀµ±ãĞ¯°æ´ò°ü½Å±¾
+::  ÓÃ·¨£ºË«»÷ÔËĞĞ£¨»ò build-portable.bat -y ÃâÈ·ÈÏ£©
+::  ²ú³ö£ºdist-portable\audio-extractor-portable-v<°æ±¾>.zip
+::  °üÄÚ×Ô´ø node.exe + ffmpeg.exe + node_modules£¬½âÑ¹¼´ÓÃ
 :: ============================================================
 
 set "PROJECT=%~dp0"
-set "DIST=%PROJECT%dist"
-set "VERSION=1.1.0"
-set "ZIPNAME=éŸ³é¢‘æå–å™¨_v%VERSION%.zip"
+set "OUTDIR=%PROJECT%dist-portable"
+set "DIST=%OUTDIR%\pkg"
 
-echo [æ‰“åŒ…] é¡¹ç›®ç›®å½•: %PROJECT%
-echo [æ‰“åŒ…] è¾“å‡ºç›®å½•: %DIST%
+:: °æ±¾ºÅÍ³Ò»È¡×Ô package.json
+for /f "delims=" %%V in ('node -e "console.log(require('./package.json').version)"') do set "VERSION=%%V"
+if "%VERSION%"=="" ( echo [´íÎó] ÎŞ·¨¶ÁÈ¡°æ±¾ºÅ£¬ÇëÈ·ÈÏÒÑ°²×° Node.js & exit /b 1 )
 
-:: æ¸…ç†æ—§äº§ç‰©
+set "ZIPNAME=audio-extractor-portable-v%VERSION%.zip"
+set "ZIPFULL=%OUTDIR%\%ZIPNAME%"
+
+echo [´ò°ü] °æ±¾: %VERSION%
+echo [´ò°ü] Êä³ö: %ZIPFULL%
+
 if exist "%DIST%" rd /s /q "%DIST%"
-mkdir "%DIST%" >nul 2>&1
+if not exist "%OUTDIR%" mkdir "%OUTDIR%"
+mkdir "%DIST%"
 
-:: å¤åˆ¶é¡¹ç›®æ ¸å¿ƒæ–‡ä»¶ï¼ˆä¸å¤åˆ¶ dev æ–‡ä»¶ï¼‰
-xcopy "%PROJECT%server.js"     "%DIST%\" /Y /Q >nul
-xcopy "%PROJECT%package.json"  "%DIST%\" /Y /Q >nul
-xcopy "%PROJECT%public"        "%DIST%\public\" /E /Y /Q >nul
+:: ---- ºËĞÄÔ´ÂëÓëÇ°¶Ë ----
+copy "%PROJECT%server.js"        "%DIST%\" >nul
+copy "%PROJECT%package.json"     "%DIST%\" >nul
+xcopy "%PROJECT%public"          "%DIST%\public\" /E /Y /Q >nul
 
-:: å¤åˆ¶ FFmpeg ä¾¿æºç‰ˆï¼ˆå¯é€‰ï¼šé¡¹ç›®æ ¹ç›®å½•æ”¾ ffmpeg-bin\ffmpeg.exe æ—¶æ‰æ‰“åŒ…ï¼‰
+:: ---- Node ÔËĞĞÊ±£¨È¡µ±Ç° node£©----
+for /f "delims=" %%N in ('node -e "console.log(process.execPath)"') do set "NODEEXE=%%N"
+if exist "%NODEEXE%" (
+  copy "%NODEEXE%" "%DIST%\node.exe" >nul
+  echo [´ò°ü] node.exe ÒÑÄÚÖÃ
+) else (
+  echo [¾¯¸æ] Î´ÕÒµ½ node.exe£¬±ãĞ¯°ü½«ÒÀÀµÄ¿±ê»úÆ÷°²×° Node.js
+)
+
+:: ---- node_modules£¨Ãâ°²×°ÒÀÀµ£©----
+if exist "%PROJECT%node_modules" (
+  xcopy "%PROJECT%node_modules" "%DIST%\node_modules\" /E /Y /Q >nul
+  echo [´ò°ü] node_modules ÒÑÄÚÖÃ
+)
+
+:: ---- FFmpeg£ºÓÅÏÈÏîÄ¿ÄÚ ffmpeg-bin£¬Æä´Î±¾»úÄ¬ÈÏÎ»ÖÃ ----
 if exist "%PROJECT%ffmpeg-bin\ffmpeg.exe" (
-    xcopy "%PROJECT%ffmpeg-bin\ffmpeg.exe" "%DIST%\ffmpeg-bin\" /Y /Q >nul
+  xcopy "%PROJECT%ffmpeg-bin\ffmpeg.exe" "%DIST%\ffmpeg-bin\" /Y /Q >nul
+) else if exist "D:\Tools\ffmpeg\bin\ffmpeg.exe" (
+  mkdir "%DIST%\ffmpeg-bin" >nul 2>&1
+  copy "D:\Tools\ffmpeg\bin\ffmpeg.exe" "%DIST%\ffmpeg-bin\ffmpeg.exe" >nul
+  echo [´ò°ü] ffmpeg.exe ÒÑ´Ó±¾»úÄ¬ÈÏÎ»ÖÃÄÚÖÃ
 ) else (
-    echo [æç¤º] æœªæ‰¾åˆ° ffmpeg-bin\\ffmpeg.exeï¼Œä¾¿æºåŒ…å°†ä¾èµ–ç›®æ ‡æœºå™¨çš„ FFmpeg
+  echo [¾¯¸æ] Î´ÕÒµ½ ffmpeg.exe£¬±ãĞ¯°ü½«ÒÀÀµÄ¿±ê»úÆ÷µÄ FFmpeg
 )
 
-:: å¤åˆ¶å¯åŠ¨è„šæœ¬ä¸å¼€æºæ–‡ä»¶
-copy "%PROJECT%å¯åŠ¨éŸ³é¢‘æå–å·¥å…·.bat" "%DIST%\" >nul
+:: ---- Æô¶¯½Å±¾ÓëÎÄµµ ----
+if exist "%PROJECT%Æô¶¯¹¤¾ß-×îĞ¡»¯.bat" copy "%PROJECT%Æô¶¯¹¤¾ß-×îĞ¡»¯.bat" "%DIST%\" >nul
+if exist "%PROJECT%Æô¶¯ÒôÆµÌáÈ¡¹¤¾ß.bat" copy "%PROJECT%Æô¶¯ÒôÆµÌáÈ¡¹¤¾ß.bat" "%DIST%\" >nul
 if exist "%PROJECT%start.bat" copy "%PROJECT%start.bat" "%DIST%\" >nul
-if exist "%PROJECT%LICENSE" xcopy "%PROJECT%LICENSE" "%DIST%\" /Y /Q >nul
-if exist "%PROJECT%README.md" xcopy "%PROJECT%README.md" "%DIST%\" /Y /Q >nul
+if exist "%PROJECT%LICENSE" copy "%PROJECT%LICENSE" "%DIST%\" >nul
+if exist "%PROJECT%README.md" copy "%PROJECT%README.md" "%DIST%\" >nul
+if exist "%PROJECT%README.txt" copy "%PROJECT%README.txt" "%DIST%\" >nul
+if exist "%PROJECT%THIRD-PARTY-NOTICES.txt" copy "%PROJECT%THIRD-PARTY-NOTICES.txt" "%DIST%\" >nul
 
-echo [æ‰“åŒ…] æ–‡ä»¶å¤åˆ¶å®Œæˆï¼Œå¼€å§‹å‹ç¼©...
+echo [´ò°ü] ÎÄ¼ş¸´ÖÆÍê³É£¬¿ªÊ¼Ñ¹Ëõ...
 
-:: ç”¨ 7z å‹ç¼©ï¼ˆä¾¿æºç‰ˆè‡ªå¸¦ 7zï¼Œæˆ–è°ƒç”¨ç³»ç»Ÿ PATHï¼‰
-where 7z >nul 2>&1
-if %errorlevel%==0 (
-    7z a -tzip -mx9 "%PROJECT%%ZIPNAME%" "%DIST%\*" >nul
+:: ---- Ñ¹Ëõ£ºÓÅÏÈ 7-Zip£¨×ÀÃæ¹¤¾ßÏä£©£¬·ñÔò PowerShell ----
+set "SZ=D:\Users\x1303\Desktop\¹¤¾ßÏä\7-Zip\7z.exe"
+if exist "%SZ%" (
+  "%SZ%" a -tzip -mx9 "%ZIPFULL%" "%DIST%\*" >nul
 ) else (
-    powershell -Command "Compress-Archive -Path '%DIST%\*' -DestinationPath '%PROJECT%%ZIPNAME%' -CompressionLevel Optimal"
+  powershell -NoProfile -Command "Compress-Archive -Path '%DIST%\*' -DestinationPath '%ZIPFULL%' -CompressionLevel Optimal"
 )
 
-if exist "%PROJECT%%ZIPNAME%" (
-    echo.
-    echo ========================================
-    echo  æ‰“åŒ…å®Œæˆï¼
-    echo  æ–‡ä»¶: %PROJECT%%ZIPNAME%
-    echo  å¤§å°: 
-    for %%F in ("%PROJECT%%ZIPNAME%") do echo    %%~zF å­—èŠ‚ ï¼ˆ%%~zF / 1048576 MBï¼‰
-    echo ========================================
-    echo.
-    echo åˆ†å‘æ–¹å¼ï¼šæŠŠ zip å‘ç»™å¯¹æ–¹ï¼Œè§£å‹ååŒå‡»ã€Œå¯åŠ¨éŸ³é¢‘æå–å·¥å…·.batã€
+if exist "%ZIPFULL%" (
+  for %%F in ("%ZIPFULL%") do set "ZSIZE=%%~zF"
+  echo.
+  echo ========================================
+  echo  ´ò°üÍê³É£¡
+  echo  ÎÄ¼ş: %ZIPFULL%
+  echo  ´óĞ¡: !ZSIZE! ×Ö½Ú
+  echo ========================================
+  echo  ·Ö·¢£º°Ñ zip ·¢¸ø¶Ô·½£¬½âÑ¹ºóË«»÷¡¸Æô¶¯¹¤¾ß-×îĞ¡»¯.bat¡¹¼´¿ÉÊ¹ÓÃ
 ) else (
-    echo [é”™è¯¯] å‹ç¼©å¤±è´¥ï¼Œè¯·æ£€æŸ¥ 7z æˆ– PowerShell æ˜¯å¦å¯ç”¨
+  echo [´íÎó] Ñ¹ËõÊ§°Ü£¬Çë¼ì²é 7-Zip »ò PowerShell ÊÇ·ñ¿ÉÓÃ
 )
 
-pause
+if /i not "%~1"=="-y" pause
