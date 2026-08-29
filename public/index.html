@@ -761,7 +761,7 @@ function renderFiles() {
     if (item.status === 'pending') badge = `<span class="file-chip-status status-pending">等待中</span>`;
     else if (item.status === 'uploading') badge = `<span class="file-chip-status status-uploading">上传中</span>`;
     else if (item.status === 'processing') badge = item.mode === 'copy' ? `<span class="file-chip-status status-copy">直拷中</span>` : `<span class="file-chip-status status-processing">转码 ${item.pct|0}%</span>`;
-    else if (item.status === 'done') badge = `<span class="file-chip-status status-done">已完成</span>`;
+    else if (item.status === 'done') badge = item.mode === 'copy' ? `<span class="file-chip-status status-copy">直拷完成</span>` : `<span class="file-chip-status status-done">已完成</span>`;
     else if (item.status === 'fail') badge = `<span class="file-chip-status status-fail"${item.errMsg ? ` title="${esc(item.errMsg)}"` : ''}>失败 </span>`;
     return `<div class="file-chip">
       <div class="file-chip-icon">${videoIcon()}</div>

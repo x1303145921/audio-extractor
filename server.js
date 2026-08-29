@@ -313,6 +313,10 @@ function extract(inputPath, format, job, outputName, opts) {
   const fmt = FORMAT_MAP[format];
   if (!fmt) return Promise.reject(new Error('不支持的格式'));
   const preferCopy = ['m4a', 'opus', 'mp3', 'flac'].includes(format);
+  // v1.6.1 修复：用户显式设置高级选项（比特率/采样率/声道）时禁用流拷贝——
+  // stream copy 无法应用这些参数，若源音轨匹配会直拷出源音质，导致 320k 等设置被静默忽略
+  const hasAdvOpts = opts && (opts.bitrate || opts.sampleRate || opts.channels);
+  const useCopy = preferCopy && !hasAdvOpts;
   // outputName 已由调用方 sanitizeOutputName 清洗（纯文件名，在 UPLOAD_DIR 内）
   const outPath = outputName ? path.join(UPLOAD_DIR, outputName) : withExt(inputPath, fmt.ext);
 
@@ -389,7 +393,7 @@ function extract(inputPath, format, job, outputName, opts) {
     return Promise.reject(err);
   };
 
-  if (preferCopy) {
+  if (useCopy) {
     return attempt(true).then(
       size => {
         if (job) job.mode = 'copy';
