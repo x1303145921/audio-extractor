@@ -564,8 +564,19 @@ resultsEl.addEventListener('click', e => {
 // 同步更新对应文件行的实时百分比，并按进度斜率估算剩余时间（EMA 平滑）
 function trackProgress(jobId, name, base, top, item) {
   let es;
-  try { es = new EventSource(`/api/progress/${encodeURIComponent(jobId)}`); }
-  catch (_) { return { close() {} }; }
+  let retryMs = 3000;
+  const connect = () => {
+    try { es = new EventSource(`/api/progress/${encodeURIComponent(jobId)}`); }
+    catch (_) { return; }
+    es.onerror = () => {
+      es.close();
+      es = null;
+      setTimeout(connect, Math.min(retryMs, 30000));
+      retryMs *= 2;
+    };
+  };
+  connect();
+  if (!es) return { close() {} };
   let lastPct = -1, lastT = 0, emaSec = null;
   es.onmessage = ev => {
     try {
@@ -579,6 +590,12 @@ function trackProgress(jobId, name, base, top, item) {
         item.status = 'processing';
         item.pct = pct;
         renderFiles();
+      }
+      if (d.status === 'failed' && (d.errorCode || d.error)) {
+        if (item) {
+          item.errMsg = d.errorCode ? `${d.errorCode}: ${d.errorHint || d.error || ''}` : (d.error || '失败');
+          renderFiles();
+        }
       }
       // ETA：两次真实刻度间推出整体耗时速率，指数平滑后估算剩余
       const now = performance.now();

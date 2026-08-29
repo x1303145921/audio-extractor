@@ -168,6 +168,26 @@ const FORMAT_MAP = {
   opus: { codec: 'libopus',    ext: '.opus',  args: ['-acodec', 'libopus',    '-b:a', '128k'] },
 };
 
+// ---------- FFmpeg 错误分类 ----------
+const FFMPEG_ERROR_CODES = [
+  { re: /Unknown encoder/i,                       code: 'ENCODER_MISSING',   hint: 'FFmpeg 缺少目标编码器，请检查 FFmpeg 版本' },
+  { re: /Invalid data|could not find codec/i,     code: 'INVALID_INPUT',     hint: '源文件编码不兼容或文件已损坏，请确认文件可正常播放' },
+  { re: /Permission denied/i,                     code: 'PERMISSION_DENIED', hint: '目录无写入权限，请换一个解压目录或以管理员权限运行' },
+  { re: /No space left/i,                         code: 'DISK_FULL',         hint: '磁盘空间不足，请清理后重试' },
+  { re: /Invalid argument/i,                      code: 'INVALID_ARGUMENT',  hint: '参数不合法，请检查输出格式是否正确' },
+  { re: /File not found|No such file/i,           code: 'FILE_NOT_FOUND',    hint: '源文件不存在，请重新上传' },
+  { re: /Error while opening/i,                   code: 'OPEN_FAILED',       hint: '无法打开源文件，请确认文件未被其他程序占用' },
+];
+const FFMPEG_ERROR_FALLBACK = { code: 'TRANSCODE_FAILED', hint: '转码失败：文件可能损坏或不支持的编码' };
+
+function classifyFfmpegError(stderr) {
+  const s = String(stderr || '');
+  for (const e of FFMPEG_ERROR_CODES) {
+    if (e.re.test(s)) return e;
+  }
+  return FFMPEG_ERROR_FALLBACK;
+}
+
 function timeToSec(s) {
   const m = s.match(/(\d+):(\d+):(\d+\.?\d*)/);
   if (!m) return 0;
@@ -213,11 +233,12 @@ function releaseSlot() {
   if (next) next();
 }
 
-// 新建或复用进度任务
+// 新建或复用进度任务（jobId 清洗：只保留字母数字下划线连字符，上限 64 字符）
 function ensureJob(rawId) {
-  const jobId = (typeof rawId === 'string' && rawId.length >= 6 && rawId.length <= 80)
-    ? rawId.replace(/[^A-Za-z0-9_-]/g, '_')
-    : `job_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const sanitized = (typeof rawId === 'string' && rawId.length >= 6 && rawId.length <= 80)
+    ? rawId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64)
+    : null;
+  const jobId = sanitized || `job_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
   let job = extractJobs.get(jobId);
   if (!job) {
     job = { status: 'queued', pct: 0, error: null, createdAt: Date.now(), finishedAt: null, proc: null, cancelled: false };
@@ -260,6 +281,8 @@ function extract(inputPath, format, job) {
     const ff = spawn(FFMPEG, args);
     if (job) job.proc = ff;
     let stderr = '';
+    const stderrLines = [];
+    const MAX_STDERR_LINES = 200;
     let duration = 0;
     let lastProgress = 0;
 
@@ -275,8 +298,10 @@ function extract(inputPath, format, job) {
     });
 
     ff.stderr.on('data', d => {
-      stderr += d.toString();
-      if (stderr.length > 512 * 1024) stderr = stderr.slice(-256 * 1024); // 防超长占用内存
+      const text = d.toString();
+      stderrLines.push(...text.split('\n'));
+      if (stderrLines.length > MAX_STDERR_LINES) stderrLines.splice(0, stderrLines.length - MAX_STDERR_LINES);
+      stderr = stderrLines.join('\n');
       if (!duration) {
         // FFmpeg 输出格式为 "Duration: HH:MM:SS.ms"
         const dm = stderr.match(/Duration:\s*([\d:.]+)/);
@@ -292,7 +317,10 @@ function extract(inputPath, format, job) {
     ff.on('close', code => {
       if (job) job.proc = null;
       if (job && job.cancelled) return reject(Object.assign(new Error('已取消'), { keepMsg: true }));
-      if (code !== 0) return reject(new Error('FFMPEG_FAIL'));
+      if (code !== 0) {
+        const cls = classifyFfmpegError(stderr);
+        return reject(Object.assign(new Error(cls.code), { code: cls.code, hint: cls.hint, stderr, keepMsg: true }));
+      }
       if (!fs.existsSync(outPath)) return reject(new Error('输出文件未生成'));
       resolve(fs.statSync(outPath).size);
     });
@@ -302,22 +330,28 @@ function extract(inputPath, format, job) {
     fs.unlink(inputPath, () => {});
     return { path: outPath, size };
   };
-  const failWith = (msg) => {
+  const failWith = (msg, code, hint) => {
     fs.unlink(inputPath, () => {});
     // 取消/失败后清掉半成品输出
     fs.unlink(outPath, () => {});
-    return Promise.reject(new Error(msg));
+    const err = Object.assign(new Error(msg), { keepMsg: true });
+    if (code) { err.code = code; err.hint = hint || ''; }
+    return Promise.reject(err);
   };
 
   if (preferCopy) {
     return attempt(true).then(
       size => finish(size),
       err => {
-        if (err.fatal || err.keepMsg) return failWith(err.message);
+        if (err.fatal || err.keepMsg) return failWith(err.message, err.code, err.hint);
         console.log(`[extract] stream copy 失败（源音轨与目标容器不兼容），回退重编码: ${path.basename(outPath)}`);
         return attempt(false).then(
           size => finish(size),
-          e2 => (e2.fatal || e2.keepMsg) ? failWith(e2.message) : failWith('转码失败：文件可能损坏或不支持的编码')
+          e2 => {
+            if (e2.fatal || e2.keepMsg) return failWith(e2.message, e2.code, e2.hint);
+            const cls2 = classifyFfmpegError(stderr);
+            return failWith(cls2.code, cls2.code, cls2.hint);
+          }
         );
       }
     );
@@ -325,7 +359,11 @@ function extract(inputPath, format, job) {
 
   return attempt(false).then(
     size => finish(size),
-    err => (err.fatal || err.keepMsg) ? failWith(err.message) : failWith('转码失败：文件可能损坏或不支持的编码')
+    err => {
+      if (err.fatal || err.keepMsg) return failWith(err.message, err.code, err.hint);
+      const cls = classifyFfmpegError(stderr);
+      return failWith(cls.code, cls.code, cls.hint);
+    }
   );
 }
 
