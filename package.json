@@ -1,33 +1,33 @@
 ﻿{
-    "name":  "audio-extractor",
-    "version": "1.5.2",
-    "description":  "从视频文件本地提取音频（M4A/MP3/WAV/FLAC/Opus），基于 FFmpeg 的自托管 Web 工具，支持 PWA 与分片上传",
-    "main":  "server.js",
-    "scripts":  {
-                    "start":  "node server.js"
-                },
-    "keywords":  [
-                     "ffmpeg",
-                     "audio-extraction",
-                     "self-hosted",
-                     "pwa",
-                     "video-to-audio"
-                 ],
-    "author":  "颜 (x1303145921)",
-    "license":  "MIT",
-    "repository":  {
-        "type":  "git",
-        "url":  "https://github.com/x1303145921/audio-extractor.git"
-    },
-    "bugs":  {
-        "url":  "https://github.com/x1303145921/audio-extractor/issues"
-    },
-    "homepage":  "https://github.com/x1303145921/audio-extractor#readme",
-    "engines":  {
-                    "node":  "\u003e=18"
-                },
-    "dependencies":  {
-                         "express":  "^5.2.1",
-                         "multer":  "^2.2.0"
-                     }
+  "name": "audio-extractor",
+  "version": "1.6.0",
+  "description": "从视频文件本地提取音频（M4A/MP3/WAV/FLAC/Opus），基于 FFmpeg 的自托管 Web 工具，支持 PWA 与分片上传",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "ffmpeg",
+    "audio-extraction",
+    "self-hosted",
+    "pwa",
+    "video-to-audio"
+  ],
+  "author": "颜 (x1303145921)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/x1303145921/audio-extractor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/x1303145921/audio-extractor/issues"
+  },
+  "homepage": "https://github.com/x1303145921/audio-extractor#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "multer": "^2.2.0"
+  }
 }

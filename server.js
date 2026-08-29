@@ -307,11 +307,12 @@ function cancelJob(jobId) {
 
 // ---------- 转码核心 ----------
 // job：进度任务对象（记录 proc 供取消，honored cancelled 标志）
-// M4A/Opus 优先尝试 stream copy；源音轨与目标容器不兼容时自动回退重编码
+// M4A/Opus/MP3/FLAC 优先尝试 stream copy（源音轨编码与输出容器匹配时无损直拷）；
+// 源音轨与目标容器不兼容时自动回退重编码（v1.6.0 起 MP3/FLAC 也纳入流拷贝优先）
 function extract(inputPath, format, job, outputName, opts) {
   const fmt = FORMAT_MAP[format];
   if (!fmt) return Promise.reject(new Error('不支持的格式'));
-  const preferCopy = (format === 'm4a' || format === 'opus');
+  const preferCopy = ['m4a', 'opus', 'mp3', 'flac'].includes(format);
   // outputName 已由调用方 sanitizeOutputName 清洗（纯文件名，在 UPLOAD_DIR 内）
   const outPath = outputName ? path.join(UPLOAD_DIR, outputName) : withExt(inputPath, fmt.ext);
 
@@ -390,11 +391,16 @@ function extract(inputPath, format, job, outputName, opts) {
 
   if (preferCopy) {
     return attempt(true).then(
-      size => finish(size),
+      size => {
+        if (job) job.mode = 'copy';
+        console.log(`[extract] 流拷贝提取完成（无损直拷）: ${path.basename(outPath)}`);
+        return finish(size);
+      },
       err => {
         // 取消（keepMsg）/启动失败（fatal）：直接失败，不回退
         if (err.fatal || err.keepMsg) return failWith(err.message, err.code, err.hint);
         // 其余（流拷贝不兼容等）：回退重编码；拒绝对象已携带 code/hint，无需再分类
+        if (job) job.mode = 'transcode';
         console.log(`[extract] stream copy 失败（源音轨与目标容器不兼容），回退重编码: ${path.basename(outPath)}`);
         return attempt(false).then(
           size => finish(size),
@@ -405,7 +411,11 @@ function extract(inputPath, format, job, outputName, opts) {
   }
 
   return attempt(false).then(
-    size => finish(size),
+    size => {
+      if (job) job.mode = 'transcode';
+      console.log(`[extract] 重编码提取完成: ${path.basename(outPath)}`);
+      return finish(size);
+    },
     // 拒绝对象已携带分类结果（code/hint）；此处不再引用 attempt 内部的 stderr（避免越界 ReferenceError）
     err => failWith(err.message, err.code, err.hint)
   );
@@ -471,6 +481,7 @@ app.post('/api/extract', upload.single('video'), async (req, res) => {
       ok: true,
       jobId,
       progress: 100,
+      mode: job.mode || null,
       downloadName: dlName,
       size: result.size,
       outputPath: '/api/download?file=' + encodeURIComponent(path.basename(result.path)) + '&name=' + encodeURIComponent(dlName),
@@ -511,7 +522,7 @@ app.get('/api/progress/:id', (req, res) => {
 
   const send = () => {
     try {
-      res.write(`data: ${JSON.stringify({ status: job.status, pct: job.pct, error: job.error, errorCode: job.errorCode || null, errorHint: job.errorHint || null })}\n\n`);
+      res.write(`data: ${JSON.stringify({ status: job.status, pct: job.pct, mode: job.mode || null, error: job.error, errorCode: job.errorCode || null, errorHint: job.errorHint || null })}\n\n`);
     } catch (_) { /* 连接断开 */ }
   };
   send();

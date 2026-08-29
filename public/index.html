@@ -364,6 +364,7 @@
   .btn-cancel:disabled { opacity: .5; cursor: wait; }
   .btn-cancel.show { display: flex; }
   .status-uploading, .status-processing { background: rgba(91,141,239,.12); color: var(--accent); }
+  .status-copy { background: rgba(45,212,168,.12); color: var(--ok); }
 
   /* batch queue */
   .batch-bar {
@@ -720,6 +721,7 @@ function trackProgress(jobId, name, base, top, item) {
         setProgress(null, `排队等待转码：${name}`);
         return;
       }
+      if (d.mode === 'copy' || d.mode === 'transcode') item.mode = d.mode; // 无损直拷 / 重编码 标记
       const pct = d.pct || 0;
       if (item && d.status === 'transcoding') {
         item.status = 'processing';
@@ -741,7 +743,10 @@ function trackProgress(jobId, name, base, top, item) {
       }
       if (pct !== lastPct) { lastPct = pct; lastT = now; }
       const disp = Math.min(top - 1, base + Math.round(pct * (top - base) / 100));
-      if (disp > 0) setProgress(disp, `转码中：${name}${emaSec != null ? ' · ' + fmtEta(emaSec) : ''}`);
+      if (disp > 0) {
+        const modeLabel = d.mode === 'copy' ? '无损直拷' : '转码';
+        setProgress(disp, `${modeLabel}：${name}${emaSec != null ? ' · ' + fmtEta(emaSec) : ''}`);
+      }
     } catch (_) {}
   };
   return es;
@@ -755,7 +760,7 @@ function renderFiles() {
     let badge = '';
     if (item.status === 'pending') badge = `<span class="file-chip-status status-pending">等待中</span>`;
     else if (item.status === 'uploading') badge = `<span class="file-chip-status status-uploading">上传中</span>`;
-    else if (item.status === 'processing') badge = `<span class="file-chip-status status-processing">转码 ${item.pct|0}%</span>`;
+    else if (item.status === 'processing') badge = item.mode === 'copy' ? `<span class="file-chip-status status-copy">直拷中</span>` : `<span class="file-chip-status status-processing">转码 ${item.pct|0}%</span>`;
     else if (item.status === 'done') badge = `<span class="file-chip-status status-done">已完成</span>`;
     else if (item.status === 'fail') badge = `<span class="file-chip-status status-fail"${item.errMsg ? ` title="${esc(item.errMsg)}"` : ''}>失败 </span>`;
     return `<div class="file-chip">
