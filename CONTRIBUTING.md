@@ -20,7 +20,7 @@
 ## 开发环境
 
 ```bash
-git clone <本仓库地址>
+git clone https://github.com/x1303145921/audio-extractor.git
 cd audio-extractor
 npm install
 npm start          # 开发调试：http://localhost:8912

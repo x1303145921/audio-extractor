@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: 语法与冒烟测试
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 服务端语法检查
+        run: node --check server.js
+
+      - name: 前端完整性检查
+        run: |
+          test -f public/index.html
+          test -f public/manifest.json
+          test -f public/service-worker.js
+          test -f public/app-icon.png
+          grep -q "serviceWorker.register" public/index.html
+          grep -q "audio-extractor" public/manifest.json
+
+      - name: 启动冒烟测试
+        run: |
+          node server.js & sleep 4
+          curl -sf http://127.0.0.1:8912/api/health
+          kill %1

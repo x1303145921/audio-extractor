@@ -8,7 +8,7 @@
 
 [![版本](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-v1.5.2-2ea44f)](https://github.com/x1303145921/audio-extractor/releases/latest)
 [![状态](https://img.shields.io/badge/%E7%8A%B6%E6%80%81-%E7%A8%B3%E5%AE%9A%E5%8F%AF%E7%94%A8-2ea44f)](https://github.com/x1303145921/audio-extractor/releases/latest)
-[![平台](https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-Windows%2010%2F11%2064%E4%BD%8D-0078d6)]()
+[![平台](https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-Windows%2010%2F11%2064%E4%BD%8D-0078d6)](https://github.com/x1303145921/audio-extractor#%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B)
 [![License](https://img.shields.io/badge/License-MIT-blue)](./LICENSE)
 
 </div>
@@ -121,7 +121,7 @@
 #### 安装与运行
 
 ```bash
-git clone <本仓库地址>
+git clone https://github.com/x1303145921/audio-extractor.git
 cd audio-extractor
 npm install
 npm start          # 或 node server.js

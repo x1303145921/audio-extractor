@@ -15,6 +15,14 @@
                  ],
     "author":  "颜 (x1303145921)",
     "license":  "MIT",
+    "repository":  {
+        "type":  "git",
+        "url":  "https://github.com/x1303145921/audio-extractor.git"
+    },
+    "bugs":  {
+        "url":  "https://github.com/x1303145921/audio-extractor/issues"
+    },
+    "homepage":  "https://github.com/x1303145921/audio-extractor#readme",
     "engines":  {
                     "node":  "\u003e=18"
                 },
