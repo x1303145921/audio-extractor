@@ -6,7 +6,7 @@
 
 **M4A · MP3 · WAV · FLAC · Opus**　|　PWA 手机安装　|　局域网共享　|　零依赖便携包
 
-[![版本](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-v1.5.0-2ea44f)](https://github.com/x1303145921/audio-extractor/releases/latest)
+[![版本](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-v1.5.1-2ea44f)](https://github.com/x1303145921/audio-extractor/releases/latest)
 [![状态](https://img.shields.io/badge/%E7%8A%B6%E6%80%81-%E7%A8%B3%E5%AE%9A%E5%8F%AF%E7%94%A8-2ea44f)](https://github.com/x1303145921/audio-extractor/releases/latest)
 [![平台](https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-Windows%2010%2F11%2064%E4%BD%8D-0078d6)]()
 [![License](https://img.shields.io/badge/License-MIT-blue)](./LICENSE)
@@ -14,16 +14,17 @@
 </div>
 
 > [!IMPORTANT]
-> ## ✅ v1.5.0 —— 当前最新版（功能升级 · 质量加固）
+> ## ✅ v1.5.1 —— 当前最新版（功能升级 · 质量加固 · 关键修复）
 >
-> v1.3.3 之前解决了可用性问题（中文文件名乱码、启动脚本缺陷、权限提取失败），从此开箱即用；**v1.4.x → v1.5.0** 在此基础上补齐体验与质量：
+> v1.3.3 之前解决了可用性问题（中文文件名乱码、启动脚本缺陷、权限提取失败），从此开箱即用；**v1.4.x → v1.5.x** 在此基础上补齐体验与质量：
 >
 > - **自定义输出文件名**：不想叫原名？填个名字就行，多文件批量自动加序号防覆盖
 > - **批量进度可视化**：多文件处理时一眼看到「3/5」总进度与状态
 > - **高级选项**：比特率 / 采样率 / 声道，想要 320k 高音质自己选
 > - **质量加固**：错误分类提示、断线重连、失败原因悬浮可见（v1.4.0–v1.4.2）
+> - **v1.5.1 关键修复**：便携包补回缺失的 Node 运行时（v1.4.0–v1.5.0 的包未打入 node.exe）；修复解压目录/用户名含点目录（如 `C:\Users\john.doe`）时的提取路径截断与下载 404
 >
-> 👉 **新用户请直接下载 [最新版 v1.5.0](https://github.com/x1303145921/audio-extractor/releases/latest)，旧版本不推荐使用。**
+> 👉 **新用户请直接下载 [最新版 v1.5.1](https://github.com/x1303145921/audio-extractor/releases/latest)，旧版本不推荐使用。**
 
 ---
 
@@ -64,7 +65,8 @@
 
 | 版本 | 状态 | 说明 |
 |---|---|---|
-| **v1.5.0** | ✅ **当前最新版** | 自定义输出文件名 + 批量进度可视化 + 高级选项；含 v1.4.x 全部特性 |
+| **v1.5.1** | ✅ **当前最新版** | 补回便携包缺失的 Node 运行时 + 修复点目录路径下提取截断/下载 404；含 v1.5.0 全部特性 |
+| v1.5.0 | 功能版 | 自定义输出文件名 + 批量进度可视化 + 高级选项（⚠️ 该版本 zip 缺 node.exe，请用 v1.5.1） |
 | v1.4.2 | 质量版 | 统一错误响应格式（errorCode/errorHint） |
 | v1.4.1 | 质量版 | FFmpeg 错误分类 + SSE 断线重连 + jobId 限制 + stderr 内存优化 |
 | v1.4.0 | 结构版 | 便携包 zip 解压为单一子目录 + 打包脚本重写（注：下载包正确；git tag 与 v1.4.1 同快照，如需从 git 构建请用 v1.4.1+） |
@@ -83,13 +85,13 @@
 
 ### 方式一：免安装便携版（推荐给非技术用户）
 
-下载 **最新版** `audio-extractor-portable-v1.5.0.zip`（见 [GitHub Releases](https://github.com/x1303145921/audio-extractor/releases)），解压后双击「**安装到桌面.bat**」：桌面自动出现带图标的「**音频提取工具**」，**以后双击桌面图标即可使用**（也可直接双击目录内的「启动工具-最小化.bat」）。
+下载 **最新版** `audio-extractor-portable-v1.5.1.zip`（见 [GitHub Releases](https://github.com/x1303145921/audio-extractor/releases)），解压后双击「**安装到桌面.bat**」：桌面自动出现带图标的「**音频提取工具**」，**以后双击桌面图标即可使用**（也可直接双击目录内的「启动工具-最小化.bat」）。
 
 包内自带 Node 运行时与 FFmpeg，**无需安装任何东西**，Windows 10/11 64 位开箱即用；首次运行如遇 SmartScreen 提示，点「更多信息 → 仍要运行」。用完在页面底部点「退出服务」即可关闭后台服务，下次双击再次启动。
 
 #### 📋 详细步骤（以 Windows 11 为例）
 
-1. **下载**：到 [Releases](https://github.com/x1303145921/audio-extractor/releases) 页下载最新版 `audio-extractor-portable-v1.5.0.zip`（国内可把链接开头的 `https://github.com/` 换成 `https://ghfast.top/https://github.com/` 走镜像加速）。
+1. **下载**：到 [Releases](https://github.com/x1303145921/audio-extractor/releases) 页下载最新版 `audio-extractor-portable-v1.5.1.zip`（国内下载慢？见下方「🚀 国内下载加速」）。
 2. **解压**：右键 zip →「全部解压缩」→ 选择一个固定目录（如 `D:\Tools\audio-extractor`）解压。**解压后不要移动/重命名文件夹**，启动器依赖相对路径。
 3. **一键安装到桌面**：双击「**安装到桌面.bat**」→ 桌面出现带图标的「**音频提取工具**」（一次性操作，以后**双击桌面图标即可启动**，无需再进文件夹）。
 4. **首次运行提示**：若弹出 SmartScreen「已保护你的电脑」，点「**更多信息 → 仍要运行**」即可（便携包没有数字签名，属正常现象）。
@@ -98,8 +100,12 @@
 
 > **关于桌面图标**：「安装到桌面.bat」已自动创建，可随时删除（不影响程序本体）；想重新创建，再双击一次安装脚本即可。手动方式：右键「启动工具-最小化.bat」→「发送到 → 桌面快捷方式」（也可右键快捷方式 → 属性 → 更改图标，选用解压目录里 `public\app-icon.ico`）。
 
-> **国内网络下载加速**：把下面链接开头的 `https://github.com/` 换成 `https://ghfast.top/https://github.com/` 即可走镜像加速，例如：
-> `https://ghfast.top/https://github.com/x1303145921/audio-extractor/releases/latest`
+> **国内网络下载加速**：GitHub 直连在国内可能很慢，任选一种：
+> 1. **镜像前缀法（最简单）**：把下载链接开头的 `https://github.com/` 换成 `https://ghfast.top/https://github.com/` 即可走镜像加速，例如：
+>    `https://ghfast.top/https://github.com/x1303145921/audio-extractor/releases/latest`
+> 2. **备用镜像**：`https://gh-proxy.com/https://github.com/...`（同样前缀替换法）
+> 3. **加速器客户端（全局生效）**：使用 Watt Toolkit（原 Steam++）等 GitHub 加速工具，开启后 GitHub 直连速度恢复正常，所有页面/下载都受益
+> 4. 若直连下载中断，可用浏览器/下载器断点续传重试
 
 自行打包便携版（需本机已有 node.exe 与 ffmpeg.exe）：直接双击项目根目录的 `build-portable.bat` 即可，版本号自动取自 package.json，产物输出到 `dist-portable\`。
 

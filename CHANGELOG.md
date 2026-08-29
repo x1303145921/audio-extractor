@@ -2,6 +2,16 @@
 
 本仓库遵循 [语义化版本](https://semver.org/lang/zh-CN/)：`主版本.次版本.补丁`。
 
+## [1.5.1] - 2026-08-29
+
+### 修复（三个真实缺陷）
+- **便携包缺 node.exe**：打包脚本 node 路径检测在 `setlocal enabledelayedexpansion` 下失效（`%%NODEEXE%%` 写法），导致 v1.4.0–v1.5.0 的 zip 均未打入 Node 运行时，无 Node 环境的机器无法启动；改用 `%NODEEXE%` 并验证包内 node.exe 就位。
+- **输出路径被点目录截断**：`withExt` 用 `inputPath.replace(/\.[^.]+$/, '')` 去扩展名，路径中含带点目录（如 `C:\Users\john.doe\...`、`.openclaw\...`）时会把点目录后的整段误当扩展名删掉，输出写到错误位置（下载 404）；改用 `path.extname` 只取最后路径段的扩展名。
+- **下载 404（点目录路径）**：Express send 库默认忽略点开头路径段，解压目录/用户名含点目录时 `res.download` 404；显式 `dotfiles: 'allow'`（file 已限定在 UPLOAD_DIR 内）。
+
+### 端到端验证
+- 重新打包后解压→启动→上传→提取→下载全链路通过（含点目录路径、中文文件名、MP3/M4A/WAV）；下载文件头 ID3 校验为有效音频。
+
 ## [1.5.0] - 2026-08-29
 
 ### 新增

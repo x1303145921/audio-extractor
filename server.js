@@ -141,7 +141,15 @@ const upload = multer({
   limits: { fileSize: 4 * 1024 * 1024 * 1024 } // 4 GB
 });
 
-function withExt(inputPath, ext) { return inputPath.replace(/\.[^.]+$/, '') + '.' + ext; }
+// 输出路径 = 源文件目录 + 去扩展名后的文件名 + 目标扩展名。
+// 用 path.extname 只取「最后一个路径段」的扩展名，避免误伤路径中带点的目录
+// （如 D:\app.v2\tmp\file → 旧正则 /\.[^.]+$/ 会把 .v2\tmp\file 整段当扩展名删掉，
+//  导致输出写到错误位置）；ext 本身带点（如 '.mp3'），拼接前去掉前导点防双点。
+function withExt(inputPath, ext) {
+  const dir = path.dirname(inputPath);
+  const base = path.basename(inputPath, path.extname(inputPath));
+  return path.join(dir, base + '.' + String(ext).replace(/^\./, ''));
+}
 
 // multer/busboy 把 multipart 里的 filename 按 Latin-1 解码，UTF-8 中文会变成 mojibake
 // （如「我的测试视频」→「茅聨麓忙聢聽忙庐聭」）。此函数还原被误解码的文件名：
@@ -483,8 +491,10 @@ app.get('/api/download', (req, res) => {
   if (!fs.existsSync(file)) return res.status(404).send('Not found');
   // 磁盘上是随机 hash 名；这里用原始文件名作下载名（中文自动 RFC5987 编码），根治 hash 怪名
   const dl = path.basename(String(req.query.name || '').trim().replace(/[\\/:*?"<>|\r\n]/g, '_'));
-  if (dl) res.download(file, dl);
-  else res.download(file);
+  // dotfiles:'allow'：send 库默认 ignore 点开头路径段，解压目录/用户名含点目录（如 C:\Users\john.doe\...）
+  // 时下载会 404；file 已通过 insideUploads 校验（限定在 UPLOAD_DIR 内），放开点目录段安全。
+  if (dl) res.download(file, dl, { dotfiles: 'allow' });
+  else res.download(file, { dotfiles: 'allow' });
 });
 
 // ---------- 实时转码进度（SSE） ----------

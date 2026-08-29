@@ -23,8 +23,8 @@ copy "%PROJECT%package.json" "%DIST%\" >nul
 xcopy "%PROJECT%public" "%DIST%\public\" /E /Y /Q >nul
 
 for /f "delims=" %%N in ('node -e "console.log(process.execPath)"') do set "NODEEXE=%%N"
-if exist "%%NODEEXE%%" (
-  copy "%%NODEEXE%%" "%DIST%\node.exe" >nul
+if exist "%NODEEXE%" (
+  copy "%NODEEXE%" "%DIST%\node.exe" >nul
   echo [build] node.exe bundled
 )
 
@@ -49,13 +49,14 @@ for %%F in ("%PROJECT%*.md") do copy "%%F" "%DIST%\" >nul
 for %%F in ("%PROJECT%*.txt") do copy "%%F" "%DIST%\" >nul
 copy "%PROJECT%LICENSE" "%DIST%\" >nul
 
+if exist "%ZIPFULL%" del /q "%ZIPFULL%"
 echo [build] compressing...
 
 set "SZ=D:\Users\x1303\Desktop\¹¤¾ßÏä\7-Zip\7z.exe"
 if exist "%SZ%" (
   "%SZ%" a -tzip -mx9 "%ZIPFULL%" "%DIST%" >nul
 ) else (
-  powershell -NoProfile -Command "Compress-Archive -Path '%DIST%' -DestinationPath '%ZIPFULL%' -CompressionLevel Optimal"
+  powershell -NoProfile -Command "Compress-Archive -Path '%DIST%' -DestinationPath '%ZIPFULL%' -CompressionLevel Optimal -Force"
 )
 
 if exist "%ZIPFULL%" (
