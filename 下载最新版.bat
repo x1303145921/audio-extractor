@@ -3,7 +3,11 @@ chcp 936 >nul
 title 下载音频提取工具 - 最新版
 cd /d "%~dp0"
 
-set "VER=1.5.2"
+rem ============================================
+rem 发布新版本时，请同步更新下面的版本号(VER)！
+rem 同时更新 build-portable.bat 打包产物内的同名文件
+rem ============================================
+set "VER=1.6.2"
 set "FILE=audio-extractor-portable-v%VER%.zip"
 set "GHURL=https://github.com/x1303145921/audio-extractor/releases/download/v%VER%/%FILE%"
 
