@@ -40,7 +40,7 @@ function ensureWritableDir(dir) {
     const fallback = path.join(os.tmpdir(), 'audio-extractor', path.basename(dir));
     try {
       fs.mkdirSync(fallback, { recursive: true });
-    } catch (_) { /* 最后兑底：原目录继续用，后续请求会报错 */ }
+    } catch (_) { /* 最后兜底：原目录继续用，后续请求会报错 */ }
     return fallback;
   }
 }
@@ -301,7 +301,7 @@ function cancelJob(jobId) {
   if (job.status !== 'queued' && job.status !== 'transcoding') return { ok: false, error: '任务已结束，无法取消' };
   job.cancelled = true;
   if (job.proc) { try { job.proc.kill(); } catch (_) {} }
-  // 若还在排队未起进程，状态由 runExtract 在起跑前检查 cancelled 标志兑now
+  // 若还在排队未起进程，状态由 runExtract 在起跑前检查 cancelled 标志兑现
   return { ok: true };
 }
 
@@ -628,7 +628,7 @@ app.post('/api/finalize-upload', async (req, res) => {
     }
   }
 
-  const mergedName = `upload_${uploadId}_${sess.filename}`;
+  const mergedName = `upload_${uploadId}_${sess.filename.replace(/[\\/:*?"<>|\r\n\t\x00-\x1f]/g, '_').replace(/^\.+/, '') || 'video'}`;
   const mergedPath = path.join(UPLOAD_DIR, mergedName); // 绝对路径，不受启动目录影响
   const relPath = path.relative(UPLOAD_DIR, mergedPath);
 
@@ -639,7 +639,7 @@ app.post('/api/finalize-upload', async (req, res) => {
     console.log(`[merge] 合并完成: ${mergedName} (${sess.totalChunks} 分片)`);
     res.json({ ok: true, path: relPath });
   } catch (e) {
-    fs.rmSync(mergedPath, { force: true }, () => {});
+    fs.rmSync(mergedPath, { force: true });
     res.status(500).json({ error: '合并失败：' + e.message });
   } finally {
     finalizingIds.delete(uploadId);
@@ -673,6 +673,7 @@ app.post('/api/extract-from-path', async (req, res) => {
     res.json({
       ok: true,
       jobId,
+      mode: job.mode || null,
       downloadName: dlName,
       size: result.size,
       outputPath: '/api/download?file=' + encodeURIComponent(path.basename(result.path)) + '&name=' + encodeURIComponent(dlName),

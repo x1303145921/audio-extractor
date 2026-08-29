@@ -1,10 +1,11 @@
-// v2: 页面改为导航网络优先(见 fetch), 缓存仅作离线兑底; 改版时递增这里强制刷新旧资源
+// v2: 页面改为导航网络优先(见 fetch), 缓存仅作离线兜底; 改版时递增这里强制刷新旧资源
 const CACHE = 'audio-extractor-v3';
 const ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/app-icon.png',
+  '/app-icon-512.png',
   '/app-icon.ico',
 ];
 

@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <link rel="icon" type="image/png" href="app-icon.png">
+ <link rel="icon" type="image/x-icon" href="app-icon.ico">
+ <link rel="apple-touch-icon" href="app-icon-512.png">
 <title>音频提取工具</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#5b8def">
@@ -919,6 +921,7 @@ extractBtn.addEventListener('click', async () => {
           const res = await fetch(API, { method: 'POST', body: form });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || '请求失败');
+          if (data.mode) item.mode = data.mode;   // SSE 断线错过 mode 时用最终响应兜底
           result = data;
         } else {
           // Large: 分片上传 → 服务端提取
