@@ -386,7 +386,8 @@ async function runExtract(fullPath, format, jobId, job, label) {
     return result;
   } catch (e) {
     job.status = 'failed';
-    job.error = e.message;
+    job.error = e.code ? `${e.code}: ${e.hint || e.message}` : e.message;
+    if (e.code) { job.errorCode = e.code; job.errorHint = e.hint || ''; }
     job.finishedAt = Date.now();
     throw e;
   } finally {
@@ -429,7 +430,9 @@ app.post('/api/extract', upload.single('video'), async (req, res) => {
       outputPath: '/api/download?file=' + encodeURIComponent(path.basename(result.path)) + '&name=' + encodeURIComponent(dlName),
     });
   } catch (e) {
-    res.status(500).json({ error: e.message, jobId });
+    const payload = { error: e.code ? `${e.code}: ${e.hint || e.message}` : e.message, jobId };
+    if (e.code) payload.errorCode = e.code;
+    res.status(500).json(payload);
   }
 });
 
@@ -460,7 +463,7 @@ app.get('/api/progress/:id', (req, res) => {
 
   const send = () => {
     try {
-      res.write(`data: ${JSON.stringify({ status: job.status, pct: job.pct, error: job.error })}\n\n`);
+      res.write(`data: ${JSON.stringify({ status: job.status, pct: job.pct, error: job.error, errorCode: job.errorCode || null, errorHint: job.errorHint || null })}\n\n`);
     } catch (_) { /* 连接断开 */ }
   };
   send();
@@ -610,7 +613,9 @@ app.post('/api/extract-from-path', async (req, res) => {
       outputPath: '/api/download?file=' + encodeURIComponent(path.basename(result.path)) + '&name=' + encodeURIComponent(dlName),
     });
   } catch (e) {
-    res.status(500).json({ error: e.message, jobId });
+    const payload = { error: e.code ? `${e.code}: ${e.hint || e.message}` : e.message, jobId };
+    if (e.code) payload.errorCode = e.code;
+    res.status(500).json(payload);
   }
 });
 
