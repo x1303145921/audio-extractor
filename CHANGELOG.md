@@ -2,6 +2,18 @@
 
 本仓库遵循 [语义化版本](https://semver.org/lang/zh-CN/)：`主版本.次版本.补丁`。
 
+## [1.5.2] - 2026-08-29
+
+### 修复
+- **PWA 离线缓存未生效**：`public/index.html` 缺少 Service Worker 注册代码，`service-worker.js` 从未被加载（缓存/离线能力是死代码）；补上注册逻辑，离线缓存与断网回退真正生效（失败不影响使用，仅失去离线能力）。
+- **package-lock.json 版本不同步**：lock 文件 version 停留在 1.1.0，与 package.json 不一致；同步为 1.5.2。
+
+### 新增
+- **「下载最新版.bat」一键下载脚本**（仓库根目录 + 随包分发）：双击自动下载最新版便携包到当前目录，国内多镜像自动回退（ghfast.top → gh-proxy.com → GitHub 直连），解决 GitHub 下载慢问题；README 同步补充下载脚本说明与镜像表格。
+
+### 清理
+- 删除 `tools/` 下三个过时打包脚本（`build.bat` 写死 v0.1.1、`build.local.example.bat`、`make-portable.ps1` 写死 v1.2.0）：与根目录 `build-portable.bat`（自动读 package.json 版本）功能重复且版本严重落后，易误导；历史保留在 git 中。
+
 ## [1.5.1] - 2026-08-29
 
 ### 修复（三个真实缺陷）

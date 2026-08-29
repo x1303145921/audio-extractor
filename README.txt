@@ -26,6 +26,8 @@
 【系统要求】 Windows 10 / 11（64 位），无需安装任何依赖，无需管理员权限。
 
 【项目主页】 https://github.com/x1303145921/audio-extractor
+【下载更新】 双击「下载最新版.bat」可一键下载新版便携包（自动走国内镜像）
+
 【国内镜像】 https://ghfast.top/https://github.com/x1303145921/audio-extractor/releases/latest
 
 【开源与许可】 本工具源码以 MIT 许可发布；FFmpeg 为第三方软件（GPL v3 构建，
