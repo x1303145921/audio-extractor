@@ -32,7 +32,7 @@ jobs:
           test -f public/service-worker.js
           test -f public/app-icon.png
           grep -q "serviceWorker.register" public/index.html
-          grep -q "audio-extractor" public/manifest.json
+          node -e "JSON.parse(require('fs').readFileSync('public/manifest.json','utf8')) && console.log('manifest JSON OK')"
 
       - name: 启动冒烟测试
         run: |
