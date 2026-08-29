@@ -365,6 +365,79 @@
   .btn-cancel.show { display: flex; }
   .status-uploading, .status-processing { background: rgba(91,141,239,.12); color: var(--accent); }
 
+  /* batch queue */
+  .batch-bar {
+    display: none;
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .batch-bar.show { display: block; }
+  .batch-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .batch-count { font-weight: 700; color: var(--fg); }
+  .batch-progress {
+    height: 4px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .batch-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    width: 0%;
+    transition: width .3s;
+    border-radius: 4px;
+  }
+
+  /* advanced options */
+  .adv-toggle {
+    background: transparent; border: none; color: var(--muted);
+    font-size: 11px; font-weight: 700; cursor: pointer;
+    padding: 4px 0; margin-top: 10px;
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: inherit;
+  }
+  .adv-toggle:hover { color: var(--accent); }
+  .adv-toggle svg { transition: transform .2s; }
+  .adv-toggle.open svg { transform: rotate(180deg); }
+  .adv-panel {
+    display: none;
+    margin-top: 10px;
+    padding: 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    gap: 10px;
+  }
+  .adv-panel.show { display: block; }
+  .adv-row {
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .adv-field {
+    flex: 1; min-width: 120px;
+  }
+  .adv-field label {
+    display: block;
+    font-size: 10px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .5px;
+    margin-bottom: 4px;
+  }
+  .adv-field select, .adv-field input {
+    width: 100%; padding: 7px 9px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 7px; color: var(--fg);
+    font-size: 12px; font-family: inherit; outline: none;
+  }
+  .adv-field select:focus, .adv-field input:focus { border-color: var(--accent); }
+
   /* error */
   .error-msg {
     margin-top: 12px;
@@ -440,6 +513,44 @@
       <label class="fmt-label"><input type="radio" name="fmt" value="opus"><span class="fmt-badge">Opus</span><span class="fmt-desc">高压缩率</span></label>
     </div>
 
+    <div class="options-title" style="margin-top:14px;">自定义输出文件名（可选）</div>
+    <input type="text" id="outputName" placeholder="留空则用原视频名；批量时自动加序号（名字_1、名字_2…）" style="width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--fg);font-size:13px;font-family:inherit;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+
+    <button type="button" class="adv-toggle" id="advToggle">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      高级选项
+    </button>
+    <div class="adv-panel" id="advPanel">
+      <div class="adv-row">
+        <div class="adv-field">
+          <label>比特率（MP3/Opus）</label>
+          <select id="advBitrate">
+            <option value="">默认</option>
+            <option value="128k">128 kbps</option>
+            <option value="192k">192 kbps</option>
+            <option value="320k">320 kbps</option>
+          </select>
+        </div>
+        <div class="adv-field">
+          <label>采样率</label>
+          <select id="advSampleRate">
+            <option value="">默认</option>
+            <option value="44100">44100 Hz</option>
+            <option value="48000">48000 Hz</option>
+            <option value="96000">96000 Hz</option>
+          </select>
+        </div>
+        <div class="adv-field">
+          <label>声道</label>
+          <select id="advChannels">
+            <option value="">默认</option>
+            <option value="1">单声道</option>
+            <option value="2">立体声</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     <button class="btn" id="extractBtn" disabled>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       开始提取
@@ -454,6 +565,14 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
       取消当前任务
     </button>
+
+    <div class="batch-bar" id="batchBar">
+      <div class="batch-meta">
+        <span>批量进度 <span class="batch-count" id="batchCount">0/0</span></span>
+        <span id="batchStatusText">等待中</span>
+      </div>
+      <div class="batch-progress"><div class="batch-progress-fill" id="batchFill"></div></div>
+    </div>
 
     <div class="results" id="results" aria-live="polite"></div>
 
@@ -482,6 +601,22 @@ const errorMsg = document.getElementById('errorMsg');
 const errorText = document.getElementById('errorText');
 const dropzone = document.getElementById('dropzone');
 const optionsEl = document.getElementById('fmtOptions');
+const outputNameEl = document.getElementById('outputName');
+const advToggleEl = document.getElementById('advToggle');
+const advPanelEl = document.getElementById('advPanel');
+const advBitrateEl = document.getElementById('advBitrate');
+const advSampleRateEl = document.getElementById('advSampleRate');
+const advChannelsEl = document.getElementById('advChannels');
+const batchBarEl = document.getElementById('batchBar');
+const batchCountEl = document.getElementById('batchCount');
+const batchFillEl = document.getElementById('batchFill');
+const batchStatusEl = document.getElementById('batchStatusText');
+
+// 高级选项面板折叠/展开
+advToggleEl.addEventListener('click', () => {
+  const open = advPanelEl.classList.toggle('show');
+  advToggleEl.classList.toggle('open', open);
+});
 
 let files = []; // [{file, status:'pending'|'done'|'fail', name, size, outPath, downloadName}]
 let processing = false;
@@ -720,9 +855,23 @@ function uploadChunked(file) {
 extractBtn.addEventListener('click', async () => {
   if (files.length === 0 || processing) return;
   const fmt = document.querySelector('input[name=fmt]:checked').value;
+  // 自定义输出名：本地预清洗（服务端还会再洗一道）；批量时自动加序号防同名覆盖
+  const customBase = (outputNameEl.value || '').trim().replace(/[\\/:*?"<>|\r\n]/g, '_').replace(/^\.+/, '').slice(0, 100);
+  const adv = { bitrate: advBitrateEl.value || '', sampleRate: advSampleRateEl.value || '', channels: advChannelsEl.value || '' };
+  const hasAdv = adv.bitrate || adv.sampleRate || adv.channels;
+  const isBatch = files.length > 1;
+  let processedCount = 0;
   processing = true;
   batchDone = false;
   optionsEl.classList.add('locked');
+  advPanelEl.classList.add('locked');
+  outputNameEl.disabled = true;
+  if (isBatch) {
+    batchBarEl.classList.add('show');
+    batchCountEl.textContent = `0/${files.length}`;
+    batchFillEl.style.width = '0%';
+    batchStatusEl.textContent = '进行中';
+  }
   renderFiles();
   errorMsg.classList.remove('show');
   progressWrap.classList.add('show');
@@ -756,6 +905,12 @@ extractBtn.addEventListener('click', async () => {
           form.append('video', item.file);
           form.append('format', fmt);
           form.append('jobId', localId);
+          if (customBase) form.append('outputName', files.length > 1 ? `${customBase}_${i + 1}` : customBase);
+          if (hasAdv) {
+            form.append('bitrate', adv.bitrate);
+            form.append('sampleRate', adv.sampleRate);
+            form.append('channels', adv.channels);
+          }
           const res = await fetch(API, { method: 'POST', body: form });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || '请求失败');
@@ -769,7 +924,11 @@ extractBtn.addEventListener('click', async () => {
           es = trackProgress(localId, item.name, 49, 99, item);
           const exRes = await fetch('/api/extract-from-path', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filePath: mergedRel, format: fmt, jobId: localId })
+            body: JSON.stringify({
+              filePath: mergedRel, format: fmt, jobId: localId,
+              ...(customBase ? { outputName: files.length > 1 ? `${customBase}_${i + 1}` : customBase } : {}),
+              ...(hasAdv ? { bitrate: adv.bitrate, sampleRate: adv.sampleRate, channels: adv.channels } : {}),
+            })
           });
           const data = await exRes.json();
           if (!exRes.ok) throw new Error(data.error);
@@ -797,6 +956,13 @@ extractBtn.addEventListener('click', async () => {
         es.close();
         if (localId && activeJobId === localId) activeJobId = null;
       }
+      // 批量进度条：每完成/失败一个文件更新一次
+      processedCount++;
+      if (isBatch) {
+        batchCountEl.textContent = `${processedCount}/${files.length}`;
+        batchFillEl.style.width = Math.round(processedCount / files.length * 100) + '%';
+        batchStatusEl.textContent = cancelled ? '已取消' : (files[i].status === 'fail' ? '部分失败' : '进行中');
+      }
     }
 
     if (cancelled) {
@@ -812,8 +978,15 @@ extractBtn.addEventListener('click', async () => {
     activeJobId = null;
     batchDone = true;
     optionsEl.classList.remove('locked');
+    advPanelEl.classList.remove('locked');
+    outputNameEl.disabled = false;
     cancelBtn.classList.remove('show');
     progressWrap.classList.remove('show');
+    if (isBatch) {
+      const failN = files.filter(f => f.status === 'fail').length;
+      batchStatusEl.textContent = cancelled ? '已取消' : (failN ? `完成（${failN} 个失败）` : '全部完成');
+      setTimeout(() => { batchBarEl.classList.remove('show'); batchFillEl.style.width = '0%'; }, 4000);
+    }
     renderResults(completed.length);
     renderFiles();
   }

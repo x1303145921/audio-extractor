@@ -6,7 +6,7 @@
 
 **M4A · MP3 · WAV · FLAC · Opus**　|　PWA 手机安装　|　局域网共享　|　零依赖便携包
 
-[![版本](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-v1.3.3-2ea44f)](https://github.com/x1303145921/audio-extractor/releases/latest)
+[![版本](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-v1.5.0-2ea44f)](https://github.com/x1303145921/audio-extractor/releases/latest)
 [![状态](https://img.shields.io/badge/%E7%8A%B6%E6%80%81-%E7%A8%B3%E5%AE%9A%E5%8F%AF%E7%94%A8-2ea44f)](https://github.com/x1303145921/audio-extractor/releases/latest)
 [![平台](https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-Windows%2010%2F11%2064%E4%BD%8D-0078d6)]()
 [![License](https://img.shields.io/badge/License-MIT-blue)](./LICENSE)
@@ -14,13 +14,16 @@
 </div>
 
 > [!IMPORTANT]
-> ## ✅ v1.3.3 —— 当前最新版（真正可用版 · 体验升级）
+> ## ✅ v1.5.0 —— 当前最新版（功能升级 · 质量加固）
 >
-> v1.3.2 解决了三类影响实际使用的问题（中文文件名乱码、启动脚本缺陷、权限导致提取失败），从它开始工具真正**开箱即用**；**v1.3.3** 在此基础上再进一步：
+> v1.3.3 之前解决了可用性问题（中文文件名乱码、启动脚本缺陷、权限提取失败），从此开箱即用；**v1.4.x → v1.5.0** 在此基础上补齐体验与质量：
 >
-> - **一键安装到桌面**：解压后双击「安装到桌面.bat」，桌面即出现带图标的「音频提取工具」，以后**双击图标即用**，无需进文件夹找脚本
+> - **自定义输出文件名**：不想叫原名？填个名字就行，多文件批量自动加序号防覆盖
+> - **批量进度可视化**：多文件处理时一眼看到「3/5」总进度与状态
+> - **高级选项**：比特率 / 采样率 / 声道，想要 320k 高音质自己选
+> - **质量加固**：错误分类提示、断线重连、失败原因悬浮可见（v1.4.0–v1.4.2）
 >
-> 👉 **新用户请直接下载 [最新版 v1.3.3](https://github.com/x1303145921/audio-extractor/releases/latest)，旧版本不推荐使用。**
+> 👉 **新用户请直接下载 [最新版 v1.5.0](https://github.com/x1303145921/audio-extractor/releases/latest)，旧版本不推荐使用。**
 
 ---
 
@@ -49,6 +52,9 @@
 - :chart_with_upwards_trend: **实时进度**：转码百分比由服务端真实回传（SSE），不靠动画假装
 - :stop_button: **任务可取消**：随时中止正在跑的转码，FFmpeg 进程即时停止
 - :package: **多结果下载列表**：批量处理时每个成品单独下载，不再只剩最后一个
+- :memo: **自定义输出文件名**：支持指定输出名，批量自动加序号；服务端安全清洗防路径穿越
+- :bar_chart: **批量进度可视化**：多文件任务显示总进度条与完成/失败状态
+- :knob: **高级转码选项**：比特率（128/192/320 kbps）、采样率（44.1/48/96 kHz）、声道可选
 - :twisted_rightwards_arrows: **端口顺延**：默认端口被占用时自动向后换新端口启动
 - :zap: **stream copy 加速**：M4A / Opus 走容器级拷贝，零重编码、约 10 倍速
 - :broom: **自动清理**：过期临时文件与中断残留定期回收，不会蚕食磁盘
@@ -58,7 +64,11 @@
 
 | 版本 | 状态 | 说明 |
 |---|---|---|
-| **v1.3.3** | ✅ **当前最新版** | 新增「安装到桌面.bat」一键创建桌面图标；含 v1.3.2 全部修复 |
+| **v1.5.0** | ✅ **当前最新版** | 自定义输出文件名 + 批量进度可视化 + 高级选项；含 v1.4.x 全部特性 |
+| v1.4.2 | 质量版 | 统一错误响应格式（errorCode/errorHint） |
+| v1.4.1 | 质量版 | FFmpeg 错误分类 + SSE 断线重连 + jobId 限制 + stderr 内存优化 |
+| v1.4.0 | 结构版 | 便携包 zip 解压为单一子目录 + 打包脚本重写 |
+| v1.3.3 | ✅ 可用版 | 新增「安装到桌面.bat」一键创建桌面图标；含 v1.3.2 全部修复 |
 | **v1.3.2** | ✅ 真正可用版 | 修复中文文件名乱码、启动脚本、权限提取失败三大问题；**从此版本起开箱即用** |
 | v1.3.1 | 修复版 | 修复启动脚本 Node 检测与换行符解析 |
 | v1.3.0 | 正式版 | 桌面级启动体验（最小化静默启动 + 一键退出） |
@@ -73,13 +83,13 @@
 
 ### 方式一：免安装便携版（推荐给非技术用户）
 
-下载 **最新版** `audio-extractor-portable-v1.3.3.zip`（见 [GitHub Releases](https://github.com/x1303145921/audio-extractor/releases)），解压后双击「**安装到桌面.bat**」：桌面自动出现带图标的「**音频提取工具**」，**以后双击桌面图标即可使用**（也可直接双击目录内的「启动工具-最小化.bat」）。
+下载 **最新版** `audio-extractor-portable-v1.5.0.zip`（见 [GitHub Releases](https://github.com/x1303145921/audio-extractor/releases)），解压后双击「**安装到桌面.bat**」：桌面自动出现带图标的「**音频提取工具**」，**以后双击桌面图标即可使用**（也可直接双击目录内的「启动工具-最小化.bat」）。
 
 包内自带 Node 运行时与 FFmpeg，**无需安装任何东西**，Windows 10/11 64 位开箱即用；首次运行如遇 SmartScreen 提示，点「更多信息 → 仍要运行」。用完在页面底部点「退出服务」即可关闭后台服务，下次双击再次启动。
 
 #### 📋 详细步骤（以 Windows 11 为例）
 
-1. **下载**：到 [Releases](https://github.com/x1303145921/audio-extractor/releases) 页下载最新版 `audio-extractor-portable-v1.3.3.zip`（国内可把链接开头的 `https://github.com/` 换成 `https://ghfast.top/https://github.com/` 走镜像加速）。
+1. **下载**：到 [Releases](https://github.com/x1303145921/audio-extractor/releases) 页下载最新版 `audio-extractor-portable-v1.5.0.zip`（国内可把链接开头的 `https://github.com/` 换成 `https://ghfast.top/https://github.com/` 走镜像加速）。
 2. **解压**：右键 zip →「全部解压缩」→ 选择一个固定目录（如 `D:\Tools\audio-extractor`）解压。**解压后不要移动/重命名文件夹**，启动器依赖相对路径。
 3. **一键安装到桌面**：双击「**安装到桌面.bat**」→ 桌面出现带图标的「**音频提取工具**」（一次性操作，以后**双击桌面图标即可启动**，无需再进文件夹）。
 4. **首次运行提示**：若弹出 SmartScreen「已保护你的电脑」，点「**更多信息 → 仍要运行**」即可（便携包没有数字签名，属正常现象）。

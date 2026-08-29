@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const multer = require('multer');
 const { spawn, spawnSync } = require('child_process');
 const path = require('path');
@@ -168,6 +168,45 @@ const FORMAT_MAP = {
   opus: { codec: 'libopus',    ext: '.opus',  args: ['-acodec', 'libopus',    '-b:a', '128k'] },
 };
 
+// ---------- 输出文件名与高级选项的安全校验 ----------
+// outputName 来自请求体，必须收敛为纯文件名：防路径穿越（..\ ..\ / 绝对路径）、
+// 非法字符、超长；不带目标扩展名时自动补上。清洗后为空则返回 null（走默认命名）。
+function sanitizeOutputName(raw, ext) {
+  if (raw == null) return null;
+  let n = path.basename(String(raw)).trim();
+  n = n.replace(/[\\/:*?"<>|\r\n\t\x00-\x1f]/g, '_').replace(/^\.+/, '').trim();
+  if (!n || /^_+$/.test(n) || n.length > 120) return null;
+  if (!n.toLowerCase().endsWith(ext)) n += ext;
+  return n;
+}
+
+// 高级转码选项：白名单校验，非法值一律忽略（保持默认行为）
+const ADV_BITRATES = ['128k', '192k', '320k'];
+const ADV_SAMPLERATES = ['44100', '48000', '96000'];
+const ADV_CHANNELS = ['1', '2'];
+function sanitizeAdvOpts(body) {
+  const b = body || {};
+  const opts = {};
+  if (ADV_BITRATES.includes(b.bitrate)) opts.bitrate = b.bitrate;
+  if (ADV_SAMPLERATES.includes(String(b.sampleRate))) opts.sampleRate = String(b.sampleRate);
+  if (ADV_CHANNELS.includes(String(b.channels))) opts.channels = String(b.channels);
+  return opts;
+}
+// 生成最终编码参数：显式比特率时移除 mp3 的 -q:a（VBR 质量与 CBR 比特率冲突，后者优先）；
+// ffmpeg 对重复参数取最后一次出现的值，追加即可覆盖 FORMAT_MAP 默认值
+function buildCodecArgs(format, opts) {
+  const a = [...FORMAT_MAP[format].args];
+  if (!opts) return a;
+  if (format === 'mp3' && opts.bitrate) {
+    const qi = a.indexOf('-q:a');
+    if (qi !== -1) a.splice(qi, 2);
+  }
+  if (opts.bitrate) a.push('-b:a', opts.bitrate);
+  if (opts.sampleRate) a.push('-ar', opts.sampleRate);
+  if (opts.channels) a.push('-ac', opts.channels);
+  return a;
+}
+
 // ---------- FFmpeg 错误分类 ----------
 const FFMPEG_ERROR_CODES = [
   { re: /Unknown encoder/i,                       code: 'ENCODER_MISSING',   hint: 'FFmpeg 缺少目标编码器，请检查 FFmpeg 版本' },
@@ -261,11 +300,12 @@ function cancelJob(jobId) {
 // ---------- 转码核心 ----------
 // job：进度任务对象（记录 proc 供取消，honored cancelled 标志）
 // M4A/Opus 优先尝试 stream copy；源音轨与目标容器不兼容时自动回退重编码
-function extract(inputPath, format, job) {
+function extract(inputPath, format, job, outputName, opts) {
   const fmt = FORMAT_MAP[format];
   if (!fmt) return Promise.reject(new Error('不支持的格式'));
   const preferCopy = (format === 'm4a' || format === 'opus');
-  const outPath = withExt(inputPath, fmt.ext);
+  // outputName 已由调用方 sanitizeOutputName 清洗（纯文件名，在 UPLOAD_DIR 内）
+  const outPath = outputName ? path.join(UPLOAD_DIR, outputName) : withExt(inputPath, fmt.ext);
 
   // 单次 ffmpeg 尝试；copy=true 时走流拷贝，否则按 FORMAT_MAP 重编码
   const attempt = (copy) => new Promise((resolve, reject) => {
@@ -273,7 +313,7 @@ function extract(inputPath, format, job) {
     const args = [
       '-i', inputPath,
       '-vn',
-      ...(copy ? ['-c:a', 'copy'] : fmt.args),
+      ...(copy ? ['-c:a', 'copy'] : buildCodecArgs(format, opts)),
       '-y',
       outPath,
     ];
@@ -319,7 +359,8 @@ function extract(inputPath, format, job) {
       if (job && job.cancelled) return reject(Object.assign(new Error('已取消'), { keepMsg: true }));
       if (code !== 0) {
         const cls = classifyFfmpegError(stderr);
-        return reject(Object.assign(new Error(cls.code), { code: cls.code, hint: cls.hint, stderr, keepMsg: true }));
+        // 不带 keepMsg：让 preferCopy 调用方能区分「编码不兼容可回退」与「取消/致命」
+        return reject(Object.assign(new Error(cls.code), { code: cls.code, hint: cls.hint, stderr }));
       }
       if (!fs.existsSync(outPath)) return reject(new Error('输出文件未生成'));
       resolve(fs.statSync(outPath).size);
@@ -343,15 +384,13 @@ function extract(inputPath, format, job) {
     return attempt(true).then(
       size => finish(size),
       err => {
+        // 取消（keepMsg）/启动失败（fatal）：直接失败，不回退
         if (err.fatal || err.keepMsg) return failWith(err.message, err.code, err.hint);
+        // 其余（流拷贝不兼容等）：回退重编码；拒绝对象已携带 code/hint，无需再分类
         console.log(`[extract] stream copy 失败（源音轨与目标容器不兼容），回退重编码: ${path.basename(outPath)}`);
         return attempt(false).then(
           size => finish(size),
-          e2 => {
-            if (e2.fatal || e2.keepMsg) return failWith(e2.message, e2.code, e2.hint);
-            const cls2 = classifyFfmpegError(stderr);
-            return failWith(cls2.code, cls2.code, cls2.hint);
-          }
+          e2 => failWith(e2.message, e2.code, e2.hint)
         );
       }
     );
@@ -359,16 +398,13 @@ function extract(inputPath, format, job) {
 
   return attempt(false).then(
     size => finish(size),
-    err => {
-      if (err.fatal || err.keepMsg) return failWith(err.message, err.code, err.hint);
-      const cls = classifyFfmpegError(stderr);
-      return failWith(cls.code, cls.code, cls.hint);
-    }
+    // 拒绝对象已携带分类结果（code/hint）；此处不再引用 attempt 内部的 stderr（避免越界 ReferenceError）
+    err => failWith(err.message, err.code, err.hint)
   );
 }
 
 // ---------- 转码统一入口：排队 → 执行 → 更新进度任务 ----------
-async function runExtract(fullPath, format, jobId, job, label) {
+async function runExtract(fullPath, format, jobId, job, label, outputName, opts) {
   await acquireSlot(label);
   try {
     if (job.cancelled) {
@@ -379,7 +415,7 @@ async function runExtract(fullPath, format, jobId, job, label) {
     }
     job.status = 'transcoding';
     console.log(`[extract] 开始 ${format}: ${label} (并发 ${activeExtracts}/${MAX_EXTRACT_JOBS})`);
-    const result = await extract(fullPath, format, job);
+    const result = await extract(fullPath, format, job, outputName, opts);
     job.status = 'done';
     job.pct = 100;
     job.finishedAt = Date.now();
@@ -413,14 +449,16 @@ app.post('/api/extract', upload.single('video'), async (req, res) => {
     fs.unlink(filePath, () => {});
     return res.status(400).json({ error: '不支持的格式: ' + format });
   }
+  const outName = sanitizeOutputName(req.body.outputName, FORMAT_MAP[format].ext);
+  const advOpts = sanitizeAdvOpts(req.body);
 
   const { jobId, job } = ensureJob(req.body.jobId);
   const label = fixUtf8Name(req.file.originalname) || path.basename(filePath);
 
   try {
-    const result = await runExtract(filePath, format, jobId, job, label);
+    const result = await runExtract(filePath, format, jobId, job, label, outName, advOpts);
     const basename = path.basename(fixUtf8Name(req.file.originalname), path.extname(fixUtf8Name(req.file.originalname)));
-    const dlName = basename + FORMAT_MAP[format].ext;
+    const dlName = outName || basename + FORMAT_MAP[format].ext;
     res.json({
       ok: true,
       jobId,
@@ -595,6 +633,8 @@ app.post('/api/extract-from-path', async (req, res) => {
   if (!FFMPEG) return res.status(500).json({ error: '服务器未找到 FFmpeg：请安装 FFmpeg 并加入 PATH，或设置环境变量 FFMPEG_PATH' });
   const { filePath, format = 'm4a' } = req.body || {};
   if (!filePath || !FORMAT_MAP[format]) return res.status(400).json({ error: '参数错误' });
+  const outName = sanitizeOutputName((req.body || {}).outputName, FORMAT_MAP[format].ext);
+  const advOpts = sanitizeAdvOpts(req.body || {});
 
   const fullPath = path.isAbsolute(filePath) ? filePath : path.join(UPLOAD_DIR, filePath);
   if (!insideUploads(fullPath)) return res.status(403).json({ error: '路径越界，仅允许处理本工具临时目录内的文件' });
@@ -602,9 +642,9 @@ app.post('/api/extract-from-path', async (req, res) => {
 
   const { jobId, job } = ensureJob(req.body.jobId);
   try {
-    const result = await runExtract(fullPath, format, jobId, job, path.basename(fullPath));
+    const result = await runExtract(fullPath, format, jobId, job, path.basename(fullPath), outName, advOpts);
     const safeName = path.basename(fullPath, path.extname(fullPath));
-    const dlName = safeName + FORMAT_MAP[format].ext;
+    const dlName = outName || safeName + FORMAT_MAP[format].ext;
     res.json({
       ok: true,
       jobId,
