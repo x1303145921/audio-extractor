@@ -52,8 +52,12 @@ copy "%PROJECT%LICENSE" "%DIST%\" >nul
 if exist "%ZIPFULL%" del /q "%ZIPFULL%"
 echo [build] compressing...
 
-set "SZ=D:\Users\x1303\Desktop\工具箱\7-Zip\7z.exe"
-if exist "%SZ%" (
+rem 压缩：优先 7z（PATH 或常见安装位置），否则回退 PowerShell Compress-Archive
+set "SZ="
+where 7z.exe >nul 2>nul && set "SZ=7z.exe"
+if not defined SZ if exist "%ProgramFiles%\7-Zip\7z.exe" set "SZ=%ProgramFiles%\7-Zip\7z.exe"
+if not defined SZ if exist "%ProgramFiles(x86)%\7-Zip\7z.exe" set "SZ=%ProgramFiles(x86)%\7-Zip\7z.exe"
+if defined SZ (
   "%SZ%" a -tzip -mx9 "%ZIPFULL%" "%DIST%" >nul
 ) else (
   powershell -NoProfile -Command "Compress-Archive -Path '%DIST%' -DestinationPath '%ZIPFULL%' -CompressionLevel Optimal -Force"
