@@ -1,36 +1,36 @@
-@echo off
+ï»¿@echo off
 chcp 936 >nul
-title ÏÂÔØÒôÆµÌáÈ¡¹¤¾ß - ×îÐÂ°æ
+title ä¸‹è½½éŸ³é¢‘æå–å·¥å…· - æœ€æ–°ç‰ˆ
 cd /d "%~dp0"
 
 rem ============================================
-rem ·¢²¼ÐÂ°æ±¾Ê±£¬ÇëÍ¬²½¸üÐÂÏÂÃæµÄ°æ±¾ºÅ(VER)£¡
-rem Í¬Ê±¸üÐÂ build-portable.bat ´ò°ü²úÎïÄÚµÄÍ¬ÃûÎÄ¼þ
+rem å‘å¸ƒæ–°ç‰ˆæœ¬æ—¶ï¼Œè¯·åŒæ­¥æ›´æ–°ä¸‹é¢çš„ç‰ˆæœ¬å·(VER)ï¼
+rem åŒæ—¶æ›´æ–° build-portable.bat æ‰“åŒ…äº§ç‰©å†…çš„åŒåæ–‡ä»¶
 rem ============================================
-set "VER=1.6.2"
+set "VER=1.6.3"
 set "FILE=audio-extractor-portable-v%VER%.zip"
 set "GHURL=https://github.com/x1303145921/audio-extractor/releases/download/v%VER%/%FILE%"
 
 echo ============================================
-echo   ÒôÆµÌáÈ¡¹¤¾ß ±ãÐ¯°æ v%VER% ÏÂÔØÆ÷
+echo   éŸ³é¢‘æå–å·¥å…· ä¾¿æºç‰ˆ v%VER% ä¸‹è½½å™¨
 echo ============================================
-echo Ä¿±êÎÄ¼þ: %FILE% £¨Ô¼ 86 MB£©
+echo ç›®æ ‡æ–‡ä»¶: %FILE% ï¼ˆçº¦ 86 MBï¼‰
 echo.
 
-echo [1/3] ÕýÔÚ´Ó¾µÏñ1£¨ghfast.top£©ÏÂÔØ...
+echo [1/3] æ­£åœ¨ä»Žé•œåƒ1ï¼ˆghfast.topï¼‰ä¸‹è½½...
 curl.exe -f -L --ssl-no-revoke --connect-timeout 10 --max-time 600 -o "%FILE%" "https://ghfast.top/%GHURL%"
 if not exist "%FILE%" (
-    echo [2/3] ¾µÏñ1²»¿ÉÓÃ£¬¸ÄÓÃ¾µÏñ2£¨gh-proxy.com£©...
+    echo [2/3] é•œåƒ1ä¸å¯ç”¨ï¼Œæ”¹ç”¨é•œåƒ2ï¼ˆgh-proxy.comï¼‰...
     curl.exe -f -L --ssl-no-revoke --connect-timeout 10 --max-time 600 -o "%FILE%" "https://gh-proxy.com/%GHURL%"
 )
 if not exist "%FILE%" (
-    echo [3/3] ¾µÏñ2Ò²²»¿ÉÓÃ£¬³¢ÊÔÖ±Á¬ GitHub£¨ÍøÂçºÃ»ò¿ª¼ÓËÙÆ÷Ê±¿ÉÓÃ£©...
+    echo [3/3] é•œåƒ2ä¹Ÿä¸å¯ç”¨ï¼Œå°è¯•ç›´è¿ž GitHubï¼ˆç½‘ç»œå¥½æˆ–å¼€åŠ é€Ÿå™¨æ—¶å¯ç”¨ï¼‰...
     curl.exe -f -L --ssl-no-revoke --connect-timeout 10 --max-time 600 -o "%FILE%" "%GHURL%"
 )
 if not exist "%FILE%" (
     echo.
-    echo [´íÎó] ÏÂÔØÊ§°Ü£¬Çë¼ì²éÍøÂçºóÖØÊÔ£»
-    echo        »òÊÖ¶¯´ò¿ª Releases Ò³ÃæÏÂÔØ£º
+    echo [é”™è¯¯] ä¸‹è½½å¤±è´¥ï¼Œè¯·æ£€æŸ¥ç½‘ç»œåŽé‡è¯•ï¼›
+    echo        æˆ–æ‰‹åŠ¨æ‰“å¼€ Releases é¡µé¢ä¸‹è½½ï¼š
     echo        https://github.com/x1303145921/audio-extractor/releases/latest
     pause
     exit /b 1
@@ -38,8 +38,8 @@ if not exist "%FILE%" (
 
 for %%F in ("%FILE%") do (
     echo.
-    echo ÏÂÔØÍê³É: %FILE%  £¨%%~zF ×Ö½Ú£©
+    echo ä¸‹è½½å®Œæˆ: %FILE%  ï¼ˆ%%~zF å­—èŠ‚ï¼‰
 )
 echo.
-echo ÏÂÒ»²½£ºÓÒ¼üÑ¹Ëõ°ü ¡ú¡¸È«²¿½âÑ¹Ëõ¡¹¡ú Ë«»÷¡¸°²×°µ½×ÀÃæ.bat¡¹
+echo ä¸‹ä¸€æ­¥ï¼šå³é”®åŽ‹ç¼©åŒ… â†’ã€Œå…¨éƒ¨è§£åŽ‹ç¼©ã€â†’ åŒå‡»ã€Œå®‰è£…åˆ°æ¡Œé¢.batã€
 pause

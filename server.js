@@ -15,9 +15,9 @@ const os = require('os');
 // ============================================================
 
 const app = express();
-// 监听地址：默认全部网卡（保持旧行为，方便手机局域网访问）；可用 BIND 收紧
-// 例：BIND=127.0.0.1 node server.js （仅本机可用，更安全）
-const BIND = process.env.BIND || '0.0.0.0';
+// 监听地址：v1.6.3 起默认仅本机（127.0.0.1，更安全，符合“本地离线工具”定位）；
+// 如需局域网共享，可手动 BIND=0.0.0.0 node server.js（注意：工具无鉴权，仅限可信网络）
+const BIND = process.env.BIND || '127.0.0.1';
 const BASE_PORT = Math.max(1, parseInt(process.env.PORT || '8912', 10));
 const PORT_RANGE = 10; // 端口被占用时向后顺延的最大尝试数
 const VERSION = require('./package.json').version;

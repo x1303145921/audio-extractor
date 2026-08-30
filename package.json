@@ -1,6 +1,6 @@
 {
   "name": "audio-extractor",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "从视频文件本地提取音频（M4A/MP3/WAV/FLAC/Opus），基于 FFmpeg 的自托管 Web 工具，支持 PWA 与分片上传",
   "main": "server.js",
   "scripts": {
