@@ -8,3 +8,5 @@
 *.ico binary
 *.zip binary
 
+*.yml text eol=lf
+.editorconfig text eol=lf

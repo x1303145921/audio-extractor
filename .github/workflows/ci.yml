@@ -22,6 +22,22 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
+      - name: 依赖漏洞审计
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: 版本一致性校验
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          if [[ "$GITHUB_REF_NAME" == v* ]]; then
+            if [ "$VER" != "${GITHUB_REF_NAME#v}" ]; then
+              echo "❌ package.json 版本 ($VER) 与 tag ($GITHUB_REF_NAME) 不一致"
+              exit 1
+            fi
+            echo "✅ tag $GITHUB_REF_NAME 与 package.json v$VER 一致"
+          else
+            echo "非 tag 触发（分支 $GITHUB_REF_NAME），当前版本 v$VER"
+          fi
+
       - name: 服务端语法检查
         run: node --check server.js
 
